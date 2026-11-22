@@ -1,21 +1,26 @@
 # MediFind – Presentation Pack
 
-Based only on the code. Nothing was run, so the steps below are from reading the code and are untested.
+Matches the code at commit `dd2f32c` (2026-11-22). The demo script below is also an automated browser
+test (`e2e/test_00_demo_script.py`), which passed in the last full browser run recorded in
+`MEDIFIND_REVIEW.md`. Run the tests yourself before quoting numbers (see section 6, Q11).
 
 ---
 
-## 1. Quick start (local, safe settings)
+## 1. Quick start (local)
 
 ```bash
 python3.11 -m venv .venv && source .venv/bin/activate   # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
-echo "DEBUG=True" > .env            # local only; do NOT copy .env.example (it is for production + Postgres)
-python manage.py migrate            # uses SQLite (db.sqlite3) because DATABASE_URL is not set
-python manage.py seed_data          # demo users, 6 pharmacies, ~30 medicines, ~70 stock rows, sample requests
+cp .env.example .env                # local-safe: DEBUG=True, SQLite, console email
+python manage.py migrate
+python manage.py seed_data          # demo data (only runs with DEBUG=True)
 python manage.py runserver          # open http://127.0.0.1:8000
 ```
 
-**Demo logins** (from `medicines/management/commands/seed_data.py`):
+For a clean demo, start from a fresh database (see `docs/DATABASE_ARCHITECTURE.md`, "Rebuilding the
+local database"); otherwise Metro Life may already be approved from an earlier run.
+
+**Demo logins** (from `medicines/management/commands/seed_data.py`; shown on the page only when DEBUG=True):
 
 | Role | Username | Password |
 |---|---|---|
@@ -24,52 +29,63 @@ python manage.py runserver          # open http://127.0.0.1:8000
 | Pharmacy owners (approved) | `apollo_owner`, `medplus_owner`, `wellness_owner`, `netmeds_owner`, `care_owner` | `password123` |
 | Pharmacy owner (**pending**) | `pending_owner` | `password123` |
 
+Seed data: 6 pharmacies in Hyderabad, Bengaluru and New Delhi (5 approved, 1 pending), 31 medicines,
+69 stock rows (some backdated 30h, 60h and 72h to show the freshness badges) and 4 requests.
+
 ## 2. Features by role
 
 **Anyone (not logged in)**
-- Home page with counts: approved pharmacies, medicines, in-stock listings.
-- Medicine search with filters: name, category, dosage form, strength, city, pincode, stock status. With the browser's location you can also filter by distance and sort by nearest.
-- Medicine detail page: which approved pharmacies list the medicine, plus a map.
-- Pharmacy directory (`/pharmacies/`) with a Leaflet map and pharmacy detail pages.
-- Each result shows "Reported: <date> (X ago)" and a warning badge if the stock is older than 24 hours.
+- Home page with counts of approved pharmacies, medicines and in-stock listings. Digits typed in the
+  "City or Pincode" box search by pincode.
+- Medicine search: name, category, dosage form, strength, city, pincode, stock status. With the
+  browser's location: radius (5–50 km) and sort by nearest. Results are ordered In Stock, Low Stock,
+  Out of Stock. List and map view.
+- Medicine detail page and pharmacy directory (`/pharmacies/`), each with a Leaflet map.
+- Every result shows "Reported: <date> (X ago)"; reports older than 24h get a "confirm" badge.
 
 **Customer**
-- Register, log in, edit profile, change or reset password.
-- Send an "availability request" (quantity + note) to an approved pharmacy.
-- "My requests" page with status tabs (Pending / Confirmed / Unavailable / Cancelled); pending requests can be cancelled.
-- Notifications page (read/unread, mark all as read) and a customer dashboard.
+- Register, log in, Sign Out (button), edit profile, change or reset password.
+- Availability request (quantity 1–1000 + note) to an approved pharmacy that lists the medicine. No
+  duplicate pending request for the same medicine and pharmacy; at most 10 requests per hour.
+- "My Requests" with status tabs; cancel while pending. Notifications page and dashboard.
 
 **Pharmacy owner**
-- Register the pharmacy (licence number, address, map coordinates). It starts as **pending approval**.
-- Inventory: add medicines from the catalogue, change quantity, delete; search, filter, sort.
-- The status is set automatically: more than 10 = In Stock, 1–10 = Low Stock, 0 = Out of Stock.
-- Freshness badges: under 24h, 24–48h, over 48h.
-- Request inbox: confirm or decline customer requests with a message, and the customer is notified.
-- Dashboard: stock chart, low-stock alerts, recent requests; edit pharmacy profile.
+- Register the pharmacy (licence number, 6-digit pincode, optional map coordinates). It starts as
+  **Pending** and is hidden until an admin approves it. One pharmacy per owner.
+- Inventory: add from the catalogue ("Set quantity" replaces the number), edit, delete; search, filter, sort.
+  Status is automatic: more than 10 = In Stock, 1–10 = Low Stock, 0 = Out of Stock.
+- Freshness tiers: within 24h, 24–48h, over 48h ("confirm before visiting").
+- Request inbox: confirm or decline once, with a message; the customer is notified.
+- Dashboard with a stock chart. Changing name, address or location sends the pharmacy back to Pending.
 
 **Admin**
-- Admin dashboard: user, pharmacy and request counts, pending approvals, medicine category chart.
-- Approve or revoke pharmacies (the owner gets a notification).
-- Manage the medicine catalogue (add/edit), list users, monitor all requests.
-- Django admin at `/admin/`.
+- Admin dashboard: counts, pending approvals, recent requests, medicines-per-category chart.
+- Approve or revoke pharmacies (Pending / Approved / Revoked). Revoking cancels the pharmacy's pending
+  requests and notifies everyone affected.
+- Medicine catalogue: add, edit, archive (no delete). Users list and all-requests monitor. Django admin at `/admin/`.
 
 ## 3. Demo script (about 5 minutes)
 
 | Time | Who | Do this | URL |
 |---|---|---|---|
 | 0:00 | Visitor | Show the home page and the disclaimer banner at the top | `/` |
-| 0:30 | Visitor | Search "Dolo"; show the results, the "Reported X ago" text and the map | `/medicines/search/?q=Dolo` |
-| 1:00 | Admin | Log in as `admin` and show the dashboard and pending approvals | `/accounts/login/` → `/dashboard/admin-portal/` |
-| 1:30 | Admin | Approve "[DEMO] Metro Life Pharmacy" | `/pharmacies/manage/list/?status=pending` |
-| 2:00 | Pharmacy | Log out, then log in as `pending_owner`; show the approval notification | `/accounts/notifications/` |
+| 0:30 | Visitor | Search "Dolo"; show the results (In Stock first), the "Reported … ago" text and the map | `/medicines/search/?q=Dolo` |
+| 1:00 | Admin | Log in as `admin`; show the dashboard and the pending pharmacy | `/accounts/login/` → `/dashboard/admin-portal/` |
+| 1:30 | Admin | Approve "[DEMO] Metro Life Pharmacy (Pending Review)" with the **Approve** button | `/pharmacies/manage/list/?status=pending` |
+| 2:00 | Pharmacy | Sign Out (user menu), log in as `pending_owner`; show the approval notification | `/accounts/notifications/` |
 | 2:20 | Pharmacy | Add Dolo 650 with 25 units; it shows as "In Stock" | `/inventory/add/` → `/inventory/` |
 | 3:00 | Customer | Log in as `customer1` and search "Dolo"; Metro Life now appears | `/medicines/search/?q=Dolo` |
 | 3:20 | Customer | Click "Request Availability" and send 2 units with a note | `/requests/create/<pharmacy_id>/<medicine_id>/` |
-| 3:50 | Pharmacy | Log in as `pending_owner`, open the inbox and confirm with a message | `/requests/pharmacy-inbox/` → `/requests/<id>/respond/` |
-| 4:30 | Customer | Log in as `customer1` and show the request as "Confirmed" plus the notification | `/requests/my-requests/` |
-| 5:00 | – | End on the disclaimer: the stock is reported by the pharmacy, not guaranteed | – |
+| 3:50 | Pharmacy | Log in as `pending_owner`, open the inbox, **Respond** → confirm with a message. The row now shows "Answered" | `/requests/pharmacy-inbox/` → `/requests/<id>/respond/` |
+| 4:30 | Customer | Log in as `customer1`; the request shows "Confirmed Available" with the message, plus the notification | `/requests/my-requests/` |
+| 5:00 | – | End on the disclaimer: the stock is reported by the pharmacy, not checked by MediFind | – |
 
-Tip: use two browsers (or one private window) so you don't have to log out and in all the time.
+Tips:
+- Use two browsers (or one private window) to avoid logging out and in.
+- "(Pending Review)" is part of the seeded pharmacy's **name**; it stays in the name after approval.
+  The status is shown separately.
+- Optional extra (1 minute): as `pending_owner`, change the pharmacy address in the profile. It goes back
+  to Pending and disappears from search until the admin approves it again.
 
 ## 4. Presentation outline (8 slides)
 
@@ -79,88 +95,102 @@ Tip: use two browsers (or one private window) so you don't have to log out and i
    - Phoning each shop takes time, especially when the need is urgent.
 2. **Solution**
    - One search for a medicine across approved local pharmacies.
-   - Pharmacies update their own stock, and every result shows when it was last updated.
-   - Customers can ask a pharmacy to confirm before they travel.
+   - Pharmacies update their own stock; every result shows when it was last reported.
+   - Customers ask the pharmacy to confirm before they travel.
 3. **Tech stack**
    - Python 3.11, Django 5.2, SQLite (local) / PostgreSQL (production).
-   - Bootstrap 5, Leaflet maps, Chart.js; plain Django templates.
-   - Gunicorn + WhiteNoise, deployed with Render (`render.yaml`, `build.sh`).
+   - Bootstrap 5, Leaflet maps (OpenStreetMap), Chart.js; server-rendered Django templates.
+   - Gunicorn + WhiteNoise, deployed with a Render Blueprint (`render.yaml`, `build.sh`).
 4. **Architecture**
    - Six Django apps: accounts, pharmacies, medicines, inventory, requests_app, dashboard.
-   - Views → `services.py` (business logic) → templates; role checks in `accounts/decorators.py`.
-   - Main models: User(role), Pharmacy, Medicine, Inventory, AvailabilityRequest, Notification.
+   - URL → view (role check) → `services.py` (business rules) → template.
+   - Models: User (role), Pharmacy, Medicine, Inventory, AvailabilityRequest, Notification.
 5. **Main features**
-   - Search by name, filters and distance (Haversine), with a map.
-   - Admin approval of pharmacies; only approved ones appear in public results.
-   - Stock status and freshness badges; request → confirm/decline → notification.
-6. **Demo**
-   - Admin approves a pharmacy.
-   - The pharmacy adds stock and the customer finds it.
-   - The customer sends a request and the pharmacy confirms it.
-7. **Limitations**
-   - Stock is reported by the pharmacy and not guaranteed or synced automatically.
-   - No payment, no reservation, no mobile app, no email/SMS alerts by default.
-   - Some security settings still need fixing before real use.
-8. **Future work**
-   - Connect to pharmacy billing systems for automatic stock updates.
-   - Email/SMS/push notifications, plus a mobile app or installable web app.
-   - Security hardening, login rate limiting, a re-check when a pharmacy changes its address.
+   - Search with filters and distance (Haversine, computed in the database), with a map.
+   - Pharmacy approval with three states; only approved pharmacies are public.
+   - Automatic stock status, freshness wording; request → answer once → notification.
+6. **Demo** (section 3).
+7. **Testing and security**
+   - 160 unit/integration tests and 68 browser tests (Playwright).
+   - Role checks plus owner-scoped queries (404 for other users' data), POST-only actions, CSRF,
+     login rate limit, safe map popups, safe production defaults.
+8. **Limitations and future work** (section 5).
 
 ## 5. Limitations and future work (honest list)
 
 **Limitations**
 - Stock is **reported by the pharmacy**; the app cannot check it. A result is not a reservation.
-- No real-time sync: stock only changes when the owner edits it by hand.
-- No payment, ordering, reservation or prescription upload.
-- No mobile app. Notifications are in-app only, and email defaults to the console (password reset emails are not really sent).
-- Distance is a straight line (Haversine), not road distance. Pharmacies without coordinates have no distance.
-- An approved pharmacy can change its name or address without being checked again.
-- Not medical advice; no doctor or pharmacist review of medicines.
-
-**Security items still to fix** (details in `MEDIFIND_REVIEW.md`)
-- Unsafe defaults if env vars are missing: hardcoded `SECRET_KEY`, `DEBUG=True`, `ALLOWED_HOSTS=*` (`config/settings.py:15-22`).
-- `seed_data` creates and resets `admin/admin123`, even in production.
-- Logout works through a GET link; there is no limit on login attempts.
-- Package versions are not pinned; Chart.js is loaded with no version.
+- No automatic sync: stock changes only when the owner edits it.
+- No payment, ordering, reservation or prescription upload; no mobile app.
+- Notifications are in-app only. Email is used only for password reset, and only after the `EMAIL_*`
+  variables are set on the server.
+- Distance is a straight line (Haversine), not road distance. Pharmacies without coordinates have no
+  distance. The medicine detail page shows no distances.
+- The login rate limit is per server process (in-memory cache).
+- No stored approval history and no rejection reason (only log lines and notifications).
+- Admins can also send availability requests; deleting a stock row leaves its pending requests open.
+- No external security test has been done. Not medical advice.
 
 **Future work**
-- Pharmacy billing (POS) integration, stock history, expiry dates.
-- Email/SMS alerts when a request is answered or when stock comes back.
-- Road distance and directions; a mobile app.
-- Fix the security items above; add an audit log of stock changes.
+- Connect to pharmacy billing (POS) systems for automatic stock updates; stock history and expiry dates.
+- Email/SMS alerts when a request is answered or stock comes back.
+- Road distance and directions; a mobile app or installable web app.
+- An approval audit log with reasons; a shared cache (for example Redis) for the rate limit.
 
 ## 6. Likely questions (short answers)
 
 1. **How do you stop one pharmacy from editing another's stock?**
-   Every edit and delete looks up the item together with the logged-in owner's pharmacy (`pharmacy=pharmacy`). Anything else returns 404 (`inventory/views.py:105-109`).
+   Edit and delete look the row up together with the logged-in owner's pharmacy
+   (`get_object_or_404(..., pharmacy=pharmacy)`, `inventory/views.py:119` and `:155`). Anything else is 404.
 2. **How do you know the stock is correct?**
-   We don't. It is reported by the pharmacy. We show when it was last updated, warn if it is older than 24h, and let the customer ask the pharmacy to confirm.
+   We don't. It is reported by the pharmacy. We show when it was last updated, warn after 24h, and let
+   the customer ask the pharmacy to confirm.
 3. **How is "In Stock / Low / Out" decided?**
-   Automatically in `Inventory.save()`: more than 10 is In Stock, 1–10 is Low Stock, 0 is Out of Stock (`inventory/models.py:52-61`).
-4. **How do you calculate distance?**
-   With the Haversine formula, using the user's browser location and the pharmacy's latitude/longitude (`pharmacies/services.py:32-67`).
-5. **Why must pharmacies be approved?**
-   To stop fake pharmacies from listing medicines. Public queries filter on `is_approved=True`.
-6. **How are user roles handled?**
-   A custom `User` model has a `role` field, and decorators such as `@pharmacy_required` protect the views.
-7. **Is it safe against CSRF and SQL injection?**
-   CSRF: yes, the middleware is on and every POST form has `{% csrf_token %}`. SQL injection: we only use the Django ORM, with no raw SQL.
-8. **What database do you use?**
-   SQLite locally and PostgreSQL in production. `DATABASE_URL` decides which.
-9. **Why use a `services.py` layer?**
-   It keeps views small and puts the business logic in one place, which makes it easier to test and reuse.
-10. **What would you improve first?**
-    The production security defaults, the order of search results, and automatic stock sync with pharmacy systems.
+   In `Inventory.save()`: more than 10 is In Stock, 1–10 Low Stock, 0 Out of Stock (`inventory/models.py:52`).
+4. **How is the search ordered?**
+   By an explicit rank: In Stock, Low Stock, Out of Stock, then newest update (`STOCK_RANK`,
+   `medicines/services.py:22`). With location, "sort by distance" puts the nearest first.
+5. **How do you calculate distance?**
+   Haversine formula on the browser's location and the pharmacy's latitude/longitude. In Python
+   (`pharmacies/services.py:35`) and as a database expression for filtering and sorting (`:91`).
+6. **Why must pharmacies be approved, and what if one changes its address?**
+   To keep fake pharmacies out. Public queries filter on approval. Changing name, address or location
+   sends an approved pharmacy back to Pending (`pharmacies/services.py:333`). A revoked pharmacy is hidden
+   and cannot change stock or answer requests.
+7. **How are roles handled?**
+   `User.role` plus decorators in `accounts/decorators.py`. Admin = role ADMIN or superuser
+   (`accounts/models.py:31`); `is_staff` alone is not enough. Admins may also open customer pages.
+8. **Can a pharmacy change its answer, or answer a cancelled request?**
+   No. Only a PENDING request can change, through a conditional database update in a transaction
+   (`requests_app/services.py:108`).
+9. **Is it safe against CSRF, SQL injection and XSS?**
+   CSRF middleware and tokens on every POST form; ORM only, no raw SQL; templates auto-escape, map data
+   goes through `json_script`, and popups use `textContent` (`static/js/map_popup.js`). Tested with a
+   stored XSS payload in the browser tests. No external penetration test yet.
+10. **What stops someone guessing passwords?**
+    5 failed logins per IP + username (20 per IP) are blocked for up to 15 minutes with HTTP 429
+    (`accounts/views.py:121`). Behind Render's proxy the real client IP is taken from `X-Forwarded-For`
+    (`TRUSTED_PROXY_COUNT=1`).
+11. **How did you test it?**
+    160 Django tests (`python manage.py test tests`) and 68 Playwright browser tests (`python -m pytest e2e`)
+    that fail on any console error. Details in `docs/TESTING_REPORT.md`.
+12. **What database do you use?**
+    SQLite locally, PostgreSQL in production; `DATABASE_URL` decides.
+13. **What would you improve first?**
+    Automatic stock sync with pharmacy systems, an approval audit log, and email/SMS alerts.
 
-## 7. Fixes to do before presenting (top 3 most visible)
+## 7. Checks before presenting
 
-1. **Search shows "Out of Stock" first.** `order_by('-availability_status')` sorts the status names in reverse alphabetical order (`medicines/services.py:68`, `:179`). Sort by a fixed rank instead (In Stock, then Low Stock, then Out of Stock). The audience will see this in the first search.
-2. **Wording that promises too much.** "Live Stock", "Real-time Stock" and "Verified Fresh" (`templates/base.html:224`, `templates/pharmacies/discovery.html:177`, `inventory/models.py:99`, `templates/inventory/list.html:149`) contradict the disclaimer. Change them to "Pharmacy-reported · updated X ago".
-3. **Chart.js has no version** (`templates/base.html:277`). A new release could break the dashboard charts during the demo. Pin it, e.g. `chart.js@4.4.1`.
+1. Run `python manage.py test tests` (and, if time allows, `python -m pytest e2e`) on the presenting machine.
+2. Rebuild the local database and run `seed_data`, so Metro Life is pending again.
+3. Make sure `.env` has `DEBUG=True` (the demo logins and `seed_data` need it).
+4. Open two browsers (one normal, one private) before starting.
 
 ---
 
-## Additional presentation notes
+## Additional presentation notes (applied)
+
+_Status: applied. Every item below is fixed or already reflected in the main text above; kept as history._
 
 Second pass (2026-11-22), from reading the code only. Details and fixes are in `MEDIFIND_REVIEW.md` → "Additional findings (second pass)".
 
@@ -180,7 +210,9 @@ Second pass (2026-11-22), from reading the code only. Details and fixes are in `
 
 ---
 
-## Updated notes after fixes
+## Updated notes after fixes (applied)
+
+_Status: applied. These changes are now part of the main text above; kept as history._
 
 After the fixes on branch `fix/all` (see "Fix log" in `MEDIFIND_REVIEW.md`). Tests were not run, so run `python manage.py test tests` yourself before quoting any test results.
 
