@@ -9,7 +9,6 @@ from medicines.models import Medicine
 from pharmacies.models import Pharmacy
 from pharmacies.services import (
     calculate_haversine_distance,
-    discover_nearby_pharmacies,
     is_valid_coordinate,
 )
 

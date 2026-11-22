@@ -16,7 +16,6 @@ from django.core.exceptions import ValidationError
 from django.db import connection, IntegrityError
 from django.test import Client, TestCase
 from django.test.utils import CaptureQueriesContext
-from django.urls import reverse
 
 from inventory.models import Inventory
 from inventory.services import get_inventory_counts, delete_inventory_item
@@ -423,7 +422,7 @@ class DatabaseOptimizationAndPerformanceTests(TestCase):
             phone_number="040-00000000",
             is_approved=True
         )
-        inv = Inventory.objects.create(pharmacy=pharm, medicine=self.med1, quantity=10)
+        Inventory.objects.create(pharmacy=pharm, medicine=self.med1, quantity=10)
         req = AvailabilityRequest.objects.create(
             customer=self.customer,
             pharmacy=pharm,

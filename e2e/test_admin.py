@@ -3,7 +3,7 @@ import re
 
 from playwright.sync_api import expect
 
-from helpers import (PASSWORD, login, make_customer, make_pharmacy, make_request, make_stock, uid,
+from helpers import (login, make_customer, make_pharmacy, make_request, make_stock, uid,
                      url_path)
 
 ADMIN = ("admin", "admin123")
@@ -59,7 +59,7 @@ def test_admin_pending_queue_and_approve_double_click(page, new_context):
 
 
 def test_admin_revoke_cancels_requests_and_notifies(page, new_context):
-    from requests_app.models import AvailabilityRequest, Notification
+    from requests_app.models import Notification
     p = make_pharmacy(name=f"Revoke Me {uid()}")
     make_stock(p, "Dolo 650", 30)
     cust = make_customer()

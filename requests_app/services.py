@@ -1,11 +1,11 @@
 import logging
 from datetime import timedelta
-from typing import Any, Dict, Optional, Tuple
+from typing import Dict, Tuple
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
 from django.db import transaction
-from django.db.models import Count, Q, QuerySet
+from django.db.models import Count, Q
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from medicines.models import Medicine

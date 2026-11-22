@@ -1,7 +1,6 @@
 import logging
 from typing import Any, Dict, Optional, Tuple
 from django.contrib.auth import authenticate, get_user_model
-from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.shortcuts import get_object_or_404
 from pharmacies.models import Pharmacy

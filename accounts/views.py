@@ -38,7 +38,7 @@ def register_customer_view(request):
                 register_customer(form.cleaned_data)
                 messages.success(request, "Account created successfully! Please log in to get started.")
                 return redirect('login')
-            except Exception as e:
+            except Exception:
                 logger.exception("Unexpected error during customer registration")
                 messages.error(request, "Registration failed due to a system error. Please try again.")
         else:
@@ -64,7 +64,7 @@ def register_pharmacy_view(request):
                     "Pharmacy registration submitted successfully! Your account will be reviewed by an administrator."
                 )
                 return redirect('login')
-            except Exception as e:
+            except Exception:
                 logger.exception("Unexpected error during pharmacy registration")
                 messages.error(request, "Registration failed due to a system error. Please try again.")
         else:

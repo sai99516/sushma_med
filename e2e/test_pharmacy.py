@@ -3,7 +3,7 @@ import re
 
 from playwright.sync_api import expect
 
-from helpers import login, make_customer, make_pharmacy, make_request, make_stock, uid, url_path
+from helpers import login, make_customer, make_pharmacy, make_request, make_stock, url_path
 
 
 def owner_login(page, pharmacy):

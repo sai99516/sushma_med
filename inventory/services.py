@@ -1,6 +1,5 @@
 import logging
-from typing import Any, Dict, Optional, Tuple
-from django.db import IntegrityError
+from typing import Dict, Tuple
 from django.db.models import Count, Q, QuerySet
 from django.shortcuts import get_object_or_404
 from medicines.models import Medicine

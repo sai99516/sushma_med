@@ -1,5 +1,5 @@
 import logging
-from typing import Any, Dict, List
+from typing import Any, Dict
 from django.contrib.auth import get_user_model
 from django.db.models import Count, Q
 from inventory.models import Inventory

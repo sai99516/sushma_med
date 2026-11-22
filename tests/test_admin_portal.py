@@ -15,7 +15,6 @@ setUp pattern: no license_number, no requires_prescription (fields do not exist 
 from django.test import TestCase, Client
 from django.urls import reverse
 from django.contrib.auth import get_user_model
-from django.core.exceptions import ValidationError
 
 from pharmacies.models import Pharmacy
 from medicines.models import Medicine

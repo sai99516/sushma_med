@@ -190,7 +190,7 @@ class EndToEndWorkflowTests(TestCase):
         self.assertFalse(pharmacy.is_approved)
 
         # 2. Admin Approves Pharmacy
-        admin = User.objects.create_superuser(
+        User.objects.create_superuser(
             username='admin_e2e', email='admin_e2e@test.com', password='AdminPass123!', role='ADMIN'
         )
         self.client.login(username='admin_e2e', password='AdminPass123!')
@@ -252,7 +252,7 @@ class EndToEndWorkflowTests(TestCase):
     # ------------------------------------------------------------------ #
     def test_04_admin_governance_workflow(self):
         """Admin: Dashboard stats -> User management -> Request monitor -> Store vetting."""
-        admin = User.objects.create_superuser(
+        User.objects.create_superuser(
             username='gov_admin_e2e', email='gov@test.com', password='AdminPass123!', role='ADMIN'
         )
         self.client.login(username='gov_admin_e2e', password='AdminPass123!')
@@ -285,7 +285,7 @@ class EndToEndWorkflowTests(TestCase):
     # ------------------------------------------------------------------ #
     def test_05_security_and_tenant_isolation(self):
         """Verify customers cannot access pharmacy/admin views, and pharmacy owners cannot edit other stores."""
-        cust = User.objects.create_user(
+        User.objects.create_user(
             username='sec_cust_e2e', email='sc@test.com', password='Pass123!', role='CUSTOMER'
         )
         pharm_owner_a = User.objects.create_user(
@@ -300,7 +300,7 @@ class EndToEndWorkflowTests(TestCase):
             address="Addr A", city="Hyd", state="TS", pincode="500001", phone_number="040-00000001",
             is_approved=True
         )
-        pharm_b = Pharmacy.objects.create(
+        Pharmacy.objects.create(
             owner=pharm_owner_b, pharmacy_name="Pharm B", registration_number="REG-B-01",
             address="Addr B", city="Hyd", state="TS", pincode="500002", phone_number="040-00000002",
             is_approved=True

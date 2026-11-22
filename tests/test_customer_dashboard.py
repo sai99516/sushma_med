@@ -140,7 +140,7 @@ class CustomerDashboardAndTrackingTests(TestCase):
 
     # 4. Customer request history
     def test_customer_request_history(self):
-        req = AvailabilityRequest.objects.create(
+        AvailabilityRequest.objects.create(
             customer=self.customer_a, pharmacy=self.pharmacy, medicine=self.med_dolo,
             quantity_requested=4, status='PENDING', request_message="Need urgently"
         )

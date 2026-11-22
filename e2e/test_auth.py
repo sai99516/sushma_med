@@ -4,7 +4,7 @@ import time
 
 from playwright.sync_api import expect
 
-from helpers import PASSWORD, alerts, login, logout, make_customer, uid, url_path
+from helpers import PASSWORD, login, logout, make_customer, uid, url_path
 
 
 def _fill_customer(page, username, password=PASSWORD, confirm=None, email=None):

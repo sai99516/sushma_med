@@ -1,6 +1,5 @@
 from django import forms
 from django.contrib.auth import get_user_model, password_validation
-from django.contrib.auth.forms import AuthenticationForm
 from django.core.exceptions import ValidationError
 from pharmacies.models import Pharmacy
 from .validators import validate_phone_number
