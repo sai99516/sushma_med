@@ -90,7 +90,7 @@ V = visitor (not logged in), C = customer, P = pharmacy owner, A = admin.
 | URL | Who | Notes |
 |---|---|---|
 | `/pharmacies/manage/list/` | A | `?status=pending|approved|revoked`, search |
-| `/pharmacies/manage/<id>/toggle-approval/` | A | POST only, with `action=approve` or `action=revoke`. The old URL name is kept; it does not toggle |
+| `/pharmacies/manage/<id>/toggle-approval/` | A | POST only, with `action=approve` or `action=revoke`. The old URL name is kept; each button sets one state |
 | `/pharmacies/manage/users/` | A | Customers and pharmacy owners (admins are not listed) |
 | `/pharmacies/manage/requests/` | A | All requests, filter by status, search |
 | `/medicines/manage/`, `/medicines/add/`, `/medicines/<id>/edit/` | A | Catalogue; archive by unticking "Active" (there is no delete page) |

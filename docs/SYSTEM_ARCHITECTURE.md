@@ -21,13 +21,13 @@ MediFind is one Django project (a "monolith": one program, one database), with s
 |---|---|
 | `config/` | `settings.py` (all settings, read from environment variables), `urls.py` (top-level URL list) |
 | `accounts/` | Custom `User` model with a `role`, registration, login/logout, profile, notifications pages, role decorators (`decorators.py`), phone and pincode validators (`validators.py`) |
-| `medicines/` | `Medicine` catalogue, public search and detail pages, admin catalogue pages, the `seed_data` command (`management/commands/seed_data.py`) |
+| `medicines/` | `Medicine` catalogue, public search and detail pages, admin catalogue pages, the `seed_data` command (`medicines/management/commands/seed_data.py`) |
 | `pharmacies/` | `Pharmacy` model, directory and detail pages, profile edit, admin approval/users/requests pages, distance helpers |
 | `inventory/` | `Inventory` (stock of one medicine at one pharmacy), the owner's stock pages |
 | `requests_app/` | `AvailabilityRequest` and `Notification` models, request create/list/inbox/respond/cancel |
 | `dashboard/` | Home page and the three role dashboards (no models of its own) |
 | `templates/` | 35 HTML templates (+1 text template for the reset-email subject), one folder per app, `base.html` is the shared layout |
-| `static/` | `css/styles.css`, `js/map_popup.js` (safe map popups), images, and `admin/js/admin/RelatedObjectLookups.js` (a patched copy of a Django admin file) |
+| `static/` | `static/css/styles.css`, `static/js/map_popup.js` (safe map popups), images, and `static/admin/js/admin/RelatedObjectLookups.js` (a patched copy of a Django admin file) |
 | `tests/` | Unit/integration tests run with Django's test runner |
 | `e2e/` | Browser tests with Playwright (see [TESTING_REPORT.md](TESTING_REPORT.md)) |
 | `render.yaml`, `build.sh`, `Procfile` | Deployment (see [PRODUCTION_DEPLOYMENT_GUIDE.md](PRODUCTION_DEPLOYMENT_GUIDE.md)) |

@@ -44,4 +44,4 @@ the current doc.
 | ../MEDIFIND_REVIEW.md | – | PROFESSIONAL_UPGRADE_ROADMAP, PROJECT_BASELINE_AUDIT, TECHNICAL_DEBT_REPORT |
 | this README | – | README_DOCS_STATUS |
 
-Wording rule for all docs: stock is **pharmacy-reported**. Do not describe it as live, real-time or verified.
+Wording rule for all docs: stock is **pharmacy-reported**. Describe it as "what the pharmacy last reported", never as checked by MediFind.
