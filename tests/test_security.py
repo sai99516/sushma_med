@@ -279,7 +279,12 @@ class MediFindSecurityTestSuite(TestCase):
         session_id = self.client.session.session_key
         self.assertTrue(bool(session_id))
 
-        logout_resp = self.client.get(reverse('logout'))
+        # Logout is POST only (review known #6 / N32): GET must not log out.
+        get_resp = self.client.get(reverse('logout'))
+        self.assertEqual(get_resp.status_code, 405)
+        self.assertIsNotNone(self.client.session.get('_auth_user_id'))
+
+        logout_resp = self.client.post(reverse('logout'))
         self.assertEqual(logout_resp.status_code, 302)
         # Session user id cleared
         self.assertIsNone(self.client.session.get('_auth_user_id'))

@@ -1,6 +1,7 @@
 import logging
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
+from django.core.exceptions import ValidationError
 from django.core.paginator import EmptyPage, PageNotAnInteger, Paginator
 from django.db.models import Count, Q
 from django.shortcuts import get_object_or_404, redirect, render
@@ -179,8 +180,12 @@ def respond_request_view(request, pk):
                 )
                 messages.success(request, f"Response recorded for Request #{req_obj.id}.")
                 return redirect('pharmacy_inbox')
-            except Exception as e:
-                messages.error(request, str(e))
+            except ValidationError as e:
+                # Known business-rule message written by us (e.g. already answered).
+                messages.error(request, " ".join(e.messages))
+            except Exception:
+                logger.exception("Unexpected error while responding to request #%s", pk)
+                messages.error(request, "Could not record your response due to a system error. Please try again.")
     else:
         form = PharmacyResponseForm(instance=req_obj)
 

@@ -261,8 +261,8 @@
                       <i class="bi bi-telephone me-1"></i> Call Pharmacy
                     </a>
 
-                    {% if item.pharmacy.latitude and item.pharmacy.longitude %}
-                      <button type="button" class="btn btn-med-outline btn-sm w-100" onclick="showOnMap({{ item.pharmacy.latitude }}, {{ item.pharmacy.longitude }}, '{{ item.pharmacy.pharmacy_name|escapejs }}', '{{ item.medicine.medicine_name|escapejs }}')">
+                    {% if item.pharmacy.latitude is not None and item.pharmacy.longitude is not None %}
+                      <button type="button" class="btn btn-med-outline btn-sm w-100 js-show-on-map" data-lat="{{ item.pharmacy.latitude }}" data-lng="{{ item.pharmacy.longitude }}" data-name="{{ item.pharmacy.pharmacy_name }}" data-medicine="{{ item.medicine.medicine_name }}">
                         <i class="bi bi-pin-map me-1"></i> Pin on Map
                       </button>
                     {% endif %}
@@ -393,20 +393,14 @@
     if (pinsData.length > 0) {
       pinsData.forEach(p => {
         const marker = L.marker([p.lat, p.lng]).addTo(markersLayer);
-        const distBadge = p.distance_km !== null ? `<span style="font-size: 0.75rem; background: #E0F2FE; color: #0369A1; padding: 2px 6px; border-radius: 10px; font-weight: 600;">${escapeHtml(p.distance_km)} km away</span>` : '';
-        const popupContent = `
-          <div style="min-width: 190px; font-family: 'Plus Jakarta Sans', sans-serif;">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
-              <strong style="color: #102A43;">${escapeHtml(p.name)}</strong>
-            </div>
-            ${distBadge}
-            <div style="font-size: 0.82rem; color: #64748B; margin-top: 4px;">${escapeHtml(p.address)}</div>
-            <div style="font-size: 0.82rem; color: #16A34A; margin-top: 2px;"><strong>${escapeHtml(p.medicine)}</strong>: ${escapeHtml(p.status)}</div>
-            <div style="margin-top: 6px;">
-              <a href="tel:${escapeHtml(p.phone)}" style="font-size: 0.82rem; color: #0EA5A4; text-decoration: none; font-weight: 600;">📞 ${escapeHtml(p.phone)}</a>
-            </div>
-          </div>
-        `;
+        const popupContent = buildPopup([
+          { text: p.name, tag: 'strong', style: 'color: #102A43; display: block; margin-bottom: 4px;' },
+          { text: p.distance_km !== null ? p.distance_km + ' km away' : '', tag: 'span', style: 'font-size: 0.75rem; background: #E0F2FE; color: #0369A1; padding: 2px 6px; border-radius: 10px; font-weight: 600;' },
+          { text: p.address, style: 'font-size: 0.82rem; color: #64748B; margin-top: 4px;' },
+          { label: p.medicine, text: p.status, style: 'font-size: 0.82rem; color: #16A34A; margin-top: 2px;' },
+          { text: p.freshness_label, style: 'font-size: 0.75rem; color: #64748B; margin-top: 2px;' },
+          { text: p.phone ? '📞 ' + p.phone : '', href: 'tel:' + (p.phone || ''), style: 'font-size: 0.82rem; color: #0EA5A4; text-decoration: none; font-weight: 600;' }
+        ]);
         marker.bindPopup(popupContent);
         bounds.push([p.lat, p.lng]);
       });
@@ -480,18 +474,23 @@
     form.submit();
   }
 
-  function showOnMap(lat, lng, pharmacyName, medicineName) {
+  function showOnMap(data) {
     toggleView('map');
-    if (mapInstance) {
-      mapInstance.setView([lat, lng], 15);
+    if (mapInstance && !isNaN(data.lat) && !isNaN(data.lng)) {
+      mapInstance.setView([data.lat, data.lng], 15);
       L.popup()
-        .setLatLng([lat, lng])
-        .setContent(`<strong>${escapeHtml(pharmacyName)}</strong><br><span>${escapeHtml(medicineName)}</span>`)
+        .setLatLng([data.lat, data.lng])
+        .setContent(buildPopup([
+          { text: data.name, tag: 'strong', style: 'display: block;' },
+          { text: data.medicine, tag: 'span' }
+        ]))
         .openOn(mapInstance);
     }
   }
-</script>
-    }
-  }
+
+  document.addEventListener('click', function (ev) {
+    const btn = ev.target.closest('.js-show-on-map');
+    if (btn) showOnMap(popupDataFromButton(btn));
+  });
 </script>
 {% endblock %}

@@ -178,7 +178,7 @@ class AuthenticationAndProfileTests(TestCase):
     def test_customer_logout(self):
         self.client.force_login(self.customer)
         self.assertIn('_auth_user_id', self.client.session)
-        resp = self.client.get(reverse('logout'))
+        resp = self.client.post(reverse('logout'))
         self.assertEqual(resp.status_code, 302)
         self.assertNotIn('_auth_user_id', self.client.session)
 

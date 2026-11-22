@@ -166,7 +166,11 @@
     const bounds = [];
     pinsData.forEach(p => {
       const marker = L.marker([p.lat, p.lng]).addTo(map);
-      marker.bindPopup(`<strong>${escapeHtml(p.name)}</strong><br>${escapeHtml(p.address)}<br><strong>${escapeHtml(p.status)}</strong>`);
+      marker.bindPopup(buildPopup([
+        { text: p.name, tag: 'strong', style: 'display: block;' },
+        { text: p.address },
+        { text: p.status, tag: 'strong', style: 'display: block;' }
+      ], 'min-width: 160px;'));
       bounds.push([p.lat, p.lng]);
     });
     map.fitBounds(bounds, { padding: [30, 30] });

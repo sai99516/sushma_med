@@ -1,7 +1,9 @@
 import logging
+from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth import login, logout
 from django.contrib.auth.decorators import login_required
+from django.core.cache import cache
 from django.core.paginator import EmptyPage, PageNotAnInteger, Paginator
 from django.shortcuts import redirect, render
 from django.utils.http import url_has_allowed_host_and_scheme
@@ -33,7 +35,7 @@ def register_customer_view(request):
                 messages.success(request, "Account created successfully! Please log in to get started.")
                 return redirect('login')
             except Exception as e:
-                logger.exception("Unexpected error during customer registration: %s", e)
+                logger.exception("Unexpected error during customer registration")
                 messages.error(request, "Registration failed due to a system error. Please try again.")
         else:
             messages.error(request, "Please correct the errors below.")
@@ -59,14 +61,35 @@ def register_pharmacy_view(request):
                 )
                 return redirect('login')
             except Exception as e:
-                logger.exception("Unexpected error during pharmacy registration: %s", e)
-                messages.error(request, f"Registration failed: {str(e)}")
+                logger.exception("Unexpected error during pharmacy registration")
+                messages.error(request, "Registration failed due to a system error. Please try again.")
         else:
             messages.error(request, "Please correct the highlighted form errors.")
     else:
         form = PharmacyRegistrationForm()
 
     return render(request, 'accounts/register_pharmacy.html', {'form': form})
+
+
+def _login_rate_keys(request, username):
+    ip = request.META.get('REMOTE_ADDR', 'unknown')
+    return [f"login-fail:ip:{ip}", f"login-fail:user:{username.lower()}"]
+
+
+def _login_is_blocked(keys):
+    limit = settings.LOGIN_RATE_LIMIT_ATTEMPTS
+    return any((cache.get(k) or 0) >= limit for k in keys)
+
+
+def _login_record_failure(keys):
+    window = settings.LOGIN_RATE_LIMIT_WINDOW
+    for k in keys:
+        if cache.add(k, 1, window):
+            continue
+        try:
+            cache.incr(k)
+        except ValueError:
+            cache.set(k, 1, window)
 
 
 def login_view(request):
@@ -78,8 +101,16 @@ def login_view(request):
         username = request.POST.get('username', '').strip()
         password = request.POST.get('password', '')
 
+        # Review known #6: simple cache-based login rate limit (per IP and per username).
+        rate_keys = _login_rate_keys(request, username)
+        if _login_is_blocked(rate_keys):
+            logger.warning("Login blocked by rate limit for username: %s", username)
+            messages.error(request, "Too many failed login attempts. Please wait a few minutes and try again.")
+            return render(request, 'accounts/login.html', status=429)
+
         user, error_msg = authenticate_user(request, username=username, password=password)
         if user is not None:
+            cache.delete_many(rate_keys)
             login(request, user)
             messages.success(request, f"Welcome back, {user.username}!")
             next_url = request.GET.get('next') or request.POST.get('next')
@@ -87,17 +118,19 @@ def login_view(request):
                 return redirect(next_url)
             return redirect('dashboard')
         else:
+            _login_record_failure(rate_keys)
             messages.error(request, error_msg)
 
     return render(request, 'accounts/login.html')
 
 
-@login_required
+@require_POST
 def logout_view(request):
-    """Logs out the active user and clears their session."""
-    username = request.user.username
+    """Logs out the active user via POST only (review known #6) and clears their session."""
+    username = request.user.username if request.user.is_authenticated else ''
     logout(request)
-    logger.info("User logged out: %s", username)
+    if username:
+        logger.info("User logged out: %s", username)
     messages.info(request, "You have been logged out safely.")
     return redirect('home')
 

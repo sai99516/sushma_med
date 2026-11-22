@@ -1,6 +1,7 @@
 import os
 from pathlib import Path
 import dj_database_url
+from django.core.exceptions import ImproperlyConfigured
 from dotenv import load_dotenv
 
 # Load local environment variables from .env file if present
@@ -12,14 +13,31 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 
-SECRET_KEY = os.environ.get(
-    'SECRET_KEY',
-    'django-insecure-medifind-final-year-cse-project-key-2026-production-ready'
-)
+def env_bool(name, default=False):
+    value = os.environ.get(name)
+    if value is None:
+        return default
+    return value.strip().lower() in ('true', '1', 'yes', 'on')
 
-DEBUG = os.environ.get('DEBUG', 'True').lower() in ('true', '1', 'yes')
 
-ALLOWED_HOSTS = [h.strip() for h in os.environ.get('ALLOWED_HOSTS', '*').split(',') if h.strip()]
+# DEBUG is off unless explicitly turned on (e.g. DEBUG=True in a local .env).
+DEBUG = env_bool('DEBUG', False)
+
+# SECRET_KEY must come from the environment in production. A fixed,
+# clearly insecure key is only allowed for local development (DEBUG=True).
+SECRET_KEY = os.environ.get('SECRET_KEY', '').strip()
+if not SECRET_KEY:
+    if DEBUG:
+        SECRET_KEY = 'django-insecure-local-development-only-do-not-use-in-production'
+    else:
+        raise ImproperlyConfigured(
+            'SECRET_KEY environment variable is not set. Set SECRET_KEY (and DEBUG=False) '
+            'in production, or set DEBUG=True in a local .env file for development.'
+        )
+
+# No wildcard default. Locally (DEBUG=True) only loopback hosts are allowed.
+_default_hosts = 'localhost,127.0.0.1,[::1]' if DEBUG else ''
+ALLOWED_HOSTS = [h.strip() for h in os.environ.get('ALLOWED_HOSTS', _default_hosts).split(',') if h.strip()]
 
 CSRF_TRUSTED_ORIGINS = [
     origin.strip()
@@ -72,6 +90,7 @@ TEMPLATES = [
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
                 'accounts.context_processors.user_notifications_count',
+                'accounts.context_processors.demo_mode',
             ],
         },
     },
@@ -127,17 +146,23 @@ STATIC_URL = '/static/'
 STATICFILES_DIRS = [BASE_DIR / 'static']
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 
-# WhiteNoise production storage: compressed and cache-hashed assets
+# WhiteNoise production storage: compressed and cache-hashed assets.
+# The manifest storage needs `collectstatic` first, so it is only used when
+# DEBUG is off AND we are deployed (DATABASE_URL set) or USE_MANIFEST_STATIC=True.
+# This keeps DEBUG=False usable locally without collectstatic (review N36).
+USE_MANIFEST_STATIC = (not DEBUG) and env_bool('USE_MANIFEST_STATIC', bool(DATABASE_URL))
 STORAGES = {
     'default': {
         'BACKEND': 'django.core.files.storage.FileSystemStorage',
     },
     'staticfiles': {
         'BACKEND': 'whitenoise.storage.CompressedManifestStaticFilesStorage'
-        if not DEBUG
+        if USE_MANIFEST_STATIC
         else 'django.contrib.staticfiles.storage.StaticFilesStorage',
     },
 }
+# Without the manifest (local DEBUG=False), let WhiteNoise serve files straight from static/.
+WHITENOISE_USE_FINDERS = not USE_MANIFEST_STATIC
 
 # Media files
 MEDIA_URL = '/media/'
@@ -160,7 +185,7 @@ if not DEBUG:
     X_FRAME_OPTIONS = 'DENY'
     SESSION_COOKIE_SECURE = True
     CSRF_COOKIE_SECURE = True
-    SECURE_SSL_REDIRECT = os.environ.get('SECURE_SSL_REDIRECT', 'True').lower() in ('true', '1', 'yes')
+    SECURE_SSL_REDIRECT = env_bool('SECURE_SSL_REDIRECT', True)
     SECURE_HSTS_SECONDS = int(os.environ.get('SECURE_HSTS_SECONDS', '31536000'))
     SECURE_HSTS_INCLUDE_SUBDOMAINS = True
     SECURE_HSTS_PRELOAD = True
@@ -175,6 +200,12 @@ EMAIL_BACKEND = os.environ.get(
     'EMAIL_BACKEND',
     'django.core.mail.backends.console.EmailBackend'
 )
+
+# Login rate limiting (review known #6): simple cache-based counter,
+# no extra dependency. After LOGIN_RATE_LIMIT_ATTEMPTS failed logins for the
+# same username or IP, further attempts are blocked for LOGIN_RATE_LIMIT_WINDOW seconds.
+LOGIN_RATE_LIMIT_ATTEMPTS = int(os.environ.get('LOGIN_RATE_LIMIT_ATTEMPTS', '5'))
+LOGIN_RATE_LIMIT_WINDOW = int(os.environ.get('LOGIN_RATE_LIMIT_WINDOW', '900'))
 
 # Centralized Logging Configuration
 LOGGING = {

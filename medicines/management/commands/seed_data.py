@@ -1,5 +1,6 @@
+from django.conf import settings
 from django.contrib.auth import get_user_model
-from django.core.management.base import BaseCommand
+from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
 from inventory.models import Inventory
 from medicines.models import Medicine
@@ -12,6 +13,13 @@ class Command(BaseCommand):
     help = "Populate demonstration dataset for MediFind final-year project presentation."
 
     def handle(self, *args, **options):
+        # Review known #2: this command creates/resets admin/admin123, so it
+        # must never run against a production (DEBUG=False) database.
+        if not settings.DEBUG:
+            raise CommandError(
+                "seed_data refuses to run when DEBUG is False. It creates the demo "
+                "superuser admin/admin123. Run it only locally with DEBUG=True."
+            )
         self.stdout.write(self.style.WARNING("Starting MediFind sample data population..."))
 
         with transaction.atomic():

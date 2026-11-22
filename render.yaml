@@ -21,10 +21,11 @@ services:
         value: "False"
       - key: SECRET_KEY
         generateValue: true
+      # Replace "medifind.onrender.com" with your real Render URL (no wildcards).
       - key: ALLOWED_HOSTS
-        value: ".onrender.com,localhost,127.0.0.1"
+        value: "medifind.onrender.com"
       - key: CSRF_TRUSTED_ORIGINS
-        value: "https://*.onrender.com,http://localhost:8000"
+        value: "https://medifind.onrender.com"
       - key: DATABASE_URL
         fromDatabase:
           name: medifind-postgres

@@ -143,7 +143,7 @@ class MediFindCompleteTestSuite(TestCase):
             'password': 'testpassword123',
         })
         self.assertEqual(login_resp.status_code, 302)
-        logout_resp = self.client.get(reverse('logout'))
+        logout_resp = self.client.post(reverse('logout'))
         self.assertEqual(logout_resp.status_code, 302)
 
     # TEST: Inventory auto-status derivation and negative quantity rejection

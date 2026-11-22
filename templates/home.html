@@ -248,7 +248,8 @@
     </div>
   </div>
 
-  <!-- 7. Academic Demonstration Credentials Callout Card -->
+  <!-- 7. Academic Demonstration Credentials Callout Card (only when DEBUG is on, review N2) -->
+  {% if show_demo_logins %}
   <div class="med-card p-4 mb-5" style="border-left: 5px solid var(--med-accent); background-color: #f0f9ff;">
     <div class="d-flex align-items-start gap-3">
       <div class="fs-2" style="color: var(--med-accent-dark);"><i class="bi bi-key-fill"></i></div>
@@ -283,6 +284,7 @@
       </div>
     </div>
   </div>
+  {% endif %}
 
   <!-- 8. Pharmacy Onboarding CTA Banner -->
   <div class="med-card p-5 text-center text-white" style="background: linear-gradient(135deg, var(--med-primary), var(--med-secondary));">

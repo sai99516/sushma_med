@@ -140,7 +140,7 @@
 <script>
   document.addEventListener('DOMContentLoaded', function() {
     const p = JSON.parse(document.getElementById('pharmacy-pin-data').textContent || '{}');
-    if (!p.lat || !p.lng) return;
+    if (typeof p.lat !== 'number' || typeof p.lng !== 'number') return;
 
     const map = L.map('map').setView([p.lat, p.lng], 15);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -149,7 +149,10 @@
 
     L.marker([p.lat, p.lng])
       .addTo(map)
-      .bindPopup(`<strong>${escapeHtml(p.name)}</strong><br>${escapeHtml(p.address)}`)
+      .bindPopup(buildPopup([
+        { text: p.name, tag: 'strong', style: 'display: block;' },
+        { text: p.address }
+      ], 'min-width: 160px;'))
       .openPopup();
   });
 </script>

@@ -39,7 +39,7 @@ def register_customer(cleaned_data: Dict[str, Any]) -> User:
         message="Welcome to MediFind! Search medicines across your city and request real-time stock updates."
     )
 
-    logger.info("New customer account registered: username=%s, email=%s", username, email)
+    logger.info("New customer account registered: username=%s (id=%s)", username, user.pk)
     return user
 
 
