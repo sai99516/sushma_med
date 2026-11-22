@@ -36,7 +36,7 @@ def get_home_page_metrics() -> Dict[str, Any]:
     }
 
 
-def get_customer_dashboard_metrics(user) -> Dict[str, Any]:
+def get_customer_dashboard_metrics(user, unread_count=None) -> Dict[str, Any]:
     """
     Computes customer dashboard metrics using a single consolidated aggregate query.
     Eliminates redundant round-trips and includes cancelled counts and unread notifications.
@@ -57,7 +57,10 @@ def get_customer_dashboard_metrics(user) -> Dict[str, Any]:
     ).select_related('pharmacy', 'medicine').order_by('-created_at')[:6]
 
     recent_notifications = Notification.objects.filter(user=user).order_by('-created_at')[:5]
-    unread_notifications_count = Notification.objects.filter(user=user, is_read=False).count()
+    # Review N39: the view passes the count already computed for the navbar.
+    if unread_count is None:
+        unread_count = Notification.objects.filter(user=user, is_read=False).count()
+    unread_notifications_count = unread_count
 
     # Time-based personalized greeting
     now = timezone.localtime(timezone.now()) if timezone.is_aware(timezone.now()) else datetime.datetime.now()
@@ -128,7 +131,7 @@ def get_pharmacy_dashboard_metrics(pharmacy: Pharmacy) -> Dict[str, Any]:
         'recent_requests': recent_requests,
         'recent_inventory': recent_inventory,
         'low_stock_alerts': low_stock_alerts,
-        'chart_labels': ['In Stock (>10)', 'Low Stock (1-10)', 'Out of Stock (0)'],
+        'chart_labels': ['In Stock (>10)', 'Low Stock (1–10 units)', 'Out of Stock (0)'],
         'chart_data': [
             inv_counts['in_stock_count'],
             inv_counts['low_stock_count'],

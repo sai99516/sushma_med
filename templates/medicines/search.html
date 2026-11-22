@@ -75,7 +75,7 @@
           <select name="status" class="form-select">
             <option value="">Any Availability</option>
             <option value="IN_STOCK" {% if status == 'IN_STOCK' %}selected{% endif %}>In Stock Only</option>
-            <option value="LOW_STOCK" {% if status == 'LOW_STOCK' %}selected{% endif %}>Low Stock (&lt; 10)</option>
+            <option value="LOW_STOCK" {% if status == 'LOW_STOCK' %}selected{% endif %}>Low Stock (1–10 units)</option>
             <option value="OUT_OF_STOCK" {% if status == 'OUT_OF_STOCK' %}selected{% endif %}>Out of Stock</option>
           </select>
         </div>
@@ -238,7 +238,7 @@
                       {% else %}
                         <div class="mt-1">
                           <span class="badge bg-success-subtle text-success-emphasis border">
-                            <i class="bi bi-check-circle me-1"></i>Fresh update ({{ item.updated_at|timesince }} ago)
+                            <i class="bi bi-check-circle me-1"></i>Pharmacy-reported &middot; updated {{ item.updated_at|timesince }} ago
                           </span>
                         </div>
                       {% endif %}

@@ -101,7 +101,7 @@
     <div class="stat-tile">
       <div>
         <div class="stat-value" style="color: var(--med-warning);">{{ low_stock_count }}</div>
-        <div class="stat-label">Low Stock (1-10)</div>
+        <div class="stat-label">Low Stock (1–10 units)</div>
       </div>
       <div class="stat-icon" style="background-color: var(--med-warning-bg); color: var(--med-warning);"><i class="bi bi-exclamation-triangle"></i></div>
     </div>
@@ -186,7 +186,7 @@
                   </td>
                   <td>
                     {% if item.freshness_tier == 'FRESH' %}
-                      <span class="badge bg-success-subtle text-success border">Fresh (&lt;24h)</span>
+                      <span class="badge bg-success-subtle text-success border">Updated &lt;24h</span>
                     {% elif item.freshness_tier == 'MODERATE' %}
                       <span class="badge bg-warning-subtle text-warning border">Moderate (24-48h)</span>
                     {% else %}
@@ -217,7 +217,7 @@
         <canvas id="inventoryDoughnutChart"></canvas>
       </div>
       <div class="text-center mt-3 small text-muted">
-        Real-time distribution of reported medicine availability lots.
+        Distribution of your pharmacy-reported stock levels.
       </div>
     </div>
   </div>

@@ -14,6 +14,7 @@ from .services import (
     get_pharmacy_detail_data,
     get_pharmacy_filter_options,
     get_pharmacy_for_user,
+    paginate,
     apply_pharmacy_profile_update,
     set_pharmacy_approval,
 )
@@ -31,6 +32,9 @@ def pharmacy_discovery_view(request):
     search_query = request.GET.get('q', '').strip()
     city = request.GET.get('city', '').strip()
     pincode = request.GET.get('pincode', '').strip()
+    compact_city = city.replace(' ', '')
+    if compact_city.isdigit() and not pincode:  # digits typed in the city box are a pincode
+        pincode, city = compact_city, ''
     radius = request.GET.get('radius', '').strip()
     user_lat = request.GET.get('lat', '').strip()
     user_lng = request.GET.get('lng', '').strip()
@@ -89,9 +93,11 @@ def pharmacy_detail_view(request, pk):
     can_see_licence = request.user.is_authenticated and (
         request.user == pharmacy.owner or request.user.is_admin_user
     )
+    # Review N39: paginate the stock list (database-side).
+    inventory_page = paginate(inventory_items, request.GET.get('page', 1), 20)
     return render(request, 'pharmacies/detail.html', {
         'pharmacy': pharmacy,
-        'inventory_items': inventory_items,
+        'inventory_items': inventory_page,
         'map_pin': map_pin,
         'can_see_licence': can_see_licence,
     })

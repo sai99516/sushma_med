@@ -323,7 +323,10 @@ class MedicineDiscoveryTests(TestCase):
         # Verify fresh item renders fresh update badge
         resp_fresh = self.client.get(reverse('search_medicines'), {'q': 'Dolo'})
         self.assertEqual(resp_fresh.status_code, 200)
-        self.assertContains(resp_fresh, "Fresh update")
+        self.assertContains(resp_fresh, "Pharmacy-reported &middot; updated")
+        # Review N31: the stale badge must belong to the stale item only.
+        self.assertNotContains(resp_fresh, "Reported &gt;24h ago &bull; Inquire to confirm")
+        self.assertNotContains(resp, "Pharmacy-reported &middot; updated")
 
     # 13. Test Medicine Detail Page and Medical Disclaimer
     def test_medicine_detail_page_and_disclaimer(self):

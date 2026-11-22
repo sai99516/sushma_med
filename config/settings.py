@@ -137,7 +137,7 @@ AUTH_PASSWORD_VALIDATORS = [
 
 # Internationalization
 LANGUAGE_CODE = 'en-us'
-TIME_ZONE = 'UTC'
+TIME_ZONE = 'Asia/Kolkata'  # Review N17: Indian users; data is still stored in UTC (USE_TZ=True)
 USE_I18N = True
 USE_TZ = True
 

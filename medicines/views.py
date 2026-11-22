@@ -19,6 +19,10 @@ def search_medicines_view(request):
     strength = request.GET.get('strength', '').strip()
     city = request.GET.get('city', '').strip()
     pincode = request.GET.get('pincode', '').strip()
+    # Review N10: the home page "City or Pincode" box sends `city`; digits mean a pincode.
+    compact_city = city.replace(' ', '')
+    if compact_city.isdigit() and not pincode:
+        pincode, city = compact_city, ''
     stock_status = request.GET.get('status', '').strip()
     radius = request.GET.get('radius', '').strip()
     user_lat = request.GET.get('lat', '').strip()

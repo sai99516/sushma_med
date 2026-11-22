@@ -1,13 +1,30 @@
 import logging
 from typing import Any, Dict, List, Optional, Tuple
-from django.core.paginator import EmptyPage, Page, PageNotAnInteger, Paginator
-from django.db.models import Q
+from django.core.paginator import Page
+from django.db.models import Case, F, IntegerField, Q, Value, When
 from django.shortcuts import get_object_or_404
 from inventory.models import Inventory
-from pharmacies.services import calculate_haversine_distance, is_valid_coordinate
+from pharmacies.services import (
+    bounding_box,
+    calculate_haversine_distance,
+    haversine_expression,
+    is_valid_coordinate,
+    paginate,
+    parse_radius,
+)
 from .models import Medicine
 
 logger = logging.getLogger('medfind')
+
+MAX_MAP_PINS = 100
+
+# Review known #3: sort by an explicit rank, not by the status text.
+STOCK_RANK = Case(
+    When(availability_status='IN_STOCK', then=Value(0)),
+    When(availability_status='LOW_STOCK', then=Value(1)),
+    default=Value(2),
+    output_field=IntegerField(),
+)
 
 
 def search_medicine_inventory(
@@ -60,88 +77,69 @@ def search_medicine_inventory(
         inventory_qs = inventory_qs.filter(pharmacy__city__icontains=city.strip())
 
     if pincode:
-        inventory_qs = inventory_qs.filter(pharmacy__pincode__icontains=pincode.strip())
+        inventory_qs = inventory_qs.filter(pharmacy__pincode=pincode.strip())  # Review N14: exact match
 
     if stock_status:
         inventory_qs = inventory_qs.filter(availability_status=stock_status)
 
-    inventory_results: List[Inventory] = list(
-        inventory_qs.order_by('-availability_status', '-updated_at')
-    )
+    # Review known #3: explicit rank In Stock -> Low Stock -> Out of Stock.
+    inventory_qs = inventory_qs.annotate(stock_rank=STOCK_RANK)
 
-    # Proximity calculation & Radius filtering
     has_user_coords = is_valid_coordinate(user_lat, user_lng)
     user_coords_dict: Optional[Dict[str, float]] = None
 
+    # Review N7: bounding box + Haversine + ordering + pagination in the database.
     if has_user_coords:
         u_lat = float(user_lat)
         u_lng = float(user_lng)
         user_coords_dict = {'lat': u_lat, 'lng': u_lng}
+        inventory_qs = inventory_qs.annotate(
+            distance_db=haversine_expression('pharmacy__latitude', 'pharmacy__longitude', u_lat, u_lng)
+        )
+        max_radius = parse_radius(radius_km)
+        if max_radius is not None:
+            min_lat, max_lat, min_lng, max_lng = bounding_box(u_lat, u_lng, max_radius)
+            inventory_qs = inventory_qs.filter(
+                pharmacy__latitude__gte=min_lat, pharmacy__latitude__lte=max_lat,
+                pharmacy__longitude__gte=min_lng, pharmacy__longitude__lte=max_lng,
+            ).filter(distance_db__lte=max_radius)
 
-        for item in inventory_results:
-            if is_valid_coordinate(item.pharmacy.latitude, item.pharmacy.longitude):
-                item.distance_km = calculate_haversine_distance(
-                    u_lat, u_lng, item.pharmacy.latitude, item.pharmacy.longitude
-                )
-            else:
-                item.distance_km = None
-
-        # Radius cutoff filter
-        if radius_km not in (None, '', 'all'):
-            try:
-                max_radius = float(radius_km)
-                if max_radius > 0:
-                    inventory_results = [
-                        item for item in inventory_results
-                        if item.distance_km is not None and item.distance_km <= max_radius
-                    ]
-            except (ValueError, TypeError):
-                pass
-
-        if sort_by == 'distance':
-            inventory_results.sort(
-                key=lambda x: (
-                    x.distance_km is None,
-                    x.distance_km if x.distance_km is not None else float('inf')
-                )
-            )
+    if has_user_coords and sort_by == 'distance':
+        inventory_qs = inventory_qs.order_by(
+            F('distance_db').asc(nulls_last=True), 'stock_rank', '-updated_at', 'pk'
+        )
     else:
-        for item in inventory_results:
-            item.distance_km = None
+        inventory_qs = inventory_qs.order_by('stock_rank', '-updated_at', 'pk')
 
-    # Map pins for Leaflet.js
+    page_obj = paginate(inventory_qs, page, per_page)
+    total_results = page_obj.paginator.count
+
+    # Distances and map pins only for the current page (at most MAX_MAP_PINS).
     map_pins: List[Dict[str, Any]] = []
     seen_pharmacies = set()
-    for item in inventory_results:
+    for item in page_obj:
         p = item.pharmacy
-        if p.id not in seen_pharmacies:
-            seen_pharmacies.add(p.id)
-            if is_valid_coordinate(p.latitude, p.longitude):
-                dist = getattr(item, 'distance_km', None)
-                map_pins.append({
-                    'id': p.id,
-                    'name': p.pharmacy_name,
-                    'address': f"{p.address}, {p.city}",
-                    'phone': p.phone_number,
-                    'lat': float(p.latitude),
-                    'lng': float(p.longitude),
-                    'medicine': item.medicine.medicine_name,
-                    'status': item.get_availability_status_display(),
-                    'freshness_tier': getattr(item, 'freshness_tier', 'FRESH'),
-                    'freshness_label': getattr(item, 'freshness_label', 'Verified Fresh (< 24h)'),
-                    'distance_km': dist,
-                })
-
-    total_results = len(inventory_results)
-
-    # Pagination
-    paginator = Paginator(inventory_results, per_page)
-    try:
-        page_obj = paginator.page(page)
-    except PageNotAnInteger:
-        page_obj = paginator.page(1)
-    except EmptyPage:
-        page_obj = paginator.page(paginator.num_pages if paginator.num_pages > 0 else 1)
+        if has_user_coords and is_valid_coordinate(p.latitude, p.longitude):
+            item.distance_km = calculate_haversine_distance(u_lat, u_lng, p.latitude, p.longitude)
+        else:
+            item.distance_km = None
+        if p.id in seen_pharmacies or len(map_pins) >= MAX_MAP_PINS:
+            continue
+        seen_pharmacies.add(p.id)
+        if is_valid_coordinate(p.latitude, p.longitude):
+            map_pins.append({
+                'id': p.id,
+                'name': p.pharmacy_name,
+                'address': f"{p.address}, {p.city}",
+                'phone': p.phone_number,
+                'lat': float(p.latitude),
+                'lng': float(p.longitude),
+                'medicine': item.medicine.medicine_name,
+                'status': item.get_availability_status_display(),
+                'freshness_tier': item.freshness_tier,
+                'freshness_label': item.freshness_label,
+                'distance_km': item.distance_km,
+            })
 
     logger.info(
         "Medicine search executed: query='%s', category='%s', city='%s', radius='%s', results_count=%d",
@@ -177,7 +175,7 @@ def get_medicine_detail_data(medicine_id: int):
     stock_records = Inventory.objects.filter(
         medicine=medicine,
         pharmacy__is_approved=True
-    ).select_related('pharmacy').order_by('-availability_status', '-updated_at')
+    ).select_related('pharmacy').annotate(stock_rank=STOCK_RANK).order_by('stock_rank', '-updated_at')
 
     map_pins = []
     for item in stock_records:

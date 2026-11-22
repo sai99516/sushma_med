@@ -1,7 +1,10 @@
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.core.management.base import BaseCommand, CommandError
+from datetime import timedelta
+
 from django.db import transaction
+from django.utils import timezone
 from inventory.models import Inventory
 from medicines.models import Medicine
 from pharmacies.models import Pharmacy
@@ -295,14 +298,30 @@ class Command(BaseCommand):
             total_inventory_items = 0
             for pharmacy, items in stock_patterns:
                 for med, qty in items:
-                    inv, _ = Inventory.objects.get_or_create(
+                    inv, created = Inventory.objects.get_or_create(
                         pharmacy=pharmacy,
                         medicine=med,
                         defaults={'quantity': qty}
                     )
-                    inv.quantity = qty
-                    inv.save()
+                    if not created and inv.quantity != qty:
+                        inv.quantity = qty
+                        inv.save()
                     total_inventory_items += 1
+
+            # Review N34: backdate a few rows so the "updated 24-48h ago" and
+            # "over 48h ago" freshness badges can be demonstrated.
+            now = timezone.now()
+            backdate_plan = [
+                (approved_pharmacies[0], timedelta(hours=30)),
+                (approved_pharmacies[1], timedelta(hours=60)),
+                (approved_pharmacies[2], timedelta(hours=72)),
+            ]
+            for pharmacy, age in backdate_plan:
+                ids = list(
+                    Inventory.objects.filter(pharmacy=pharmacy).order_by('pk').values_list('pk', flat=True)[:3]
+                )
+                # .update() bypasses auto_now, so updated_at keeps the old value.
+                Inventory.objects.filter(pk__in=ids).update(updated_at=now - age)
 
             self.stdout.write(self.style.SUCCESS(f"[OK] {total_inventory_items} Sample Inventory records generated."))
 
@@ -361,16 +380,16 @@ class Command(BaseCommand):
 
             self.stdout.write(self.style.SUCCESS(f"[OK] {len(sample_requests)} Sample Availability Requests created."))
 
-            # 7. Sample Notifications
-            Notification.objects.create(
+            # 7. Sample Notifications (get_or_create so re-runs do not add duplicates, review N34)
+            Notification.objects.get_or_create(
                 user=customers[0],
                 message="[DEMO] Apollo Healthcare Store confirmed your request for Dolo 650."
             )
-            Notification.objects.create(
+            Notification.objects.get_or_create(
                 user=customers[1],
                 message="[DEMO] MedPlus Pharma Hub updated your inquiry status for Insulin Glargine."
             )
-            Notification.objects.create(
+            Notification.objects.get_or_create(
                 user=approved_pharmacies[2].owner,
                 message="New urgent availability request received for Asthalin Inhaler from customer3."
             )

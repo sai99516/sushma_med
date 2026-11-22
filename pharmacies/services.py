@@ -3,7 +3,8 @@ import math
 from typing import Any, Dict, List, Optional, Tuple
 from django.core.paginator import EmptyPage, Page, PageNotAnInteger, Paginator
 from django.db import transaction
-from django.db.models import Q, QuerySet
+from django.db.models import ExpressionWrapper, F, FloatField, Q, QuerySet, Value
+from django.db.models.functions import ASin, Cast, Cos, Least, Lower, Power, Radians, Sin, Sqrt
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from requests_app.models import Notification
@@ -69,6 +70,67 @@ def calculate_haversine_distance(lat1: Any, lon1: Any, lat2: Any, lon2: Any) -> 
     return round(distance, 2)
 
 
+EARTH_RADIUS_KM = 6371.0
+
+
+def bounding_box(lat: float, lng: float, radius_km: float) -> Tuple[float, float, float, float]:
+    """
+    Review N7: cheap lat/lng box around a point, used as a DB filter before the
+    exact Haversine distance. Slightly larger than the circle (110 km per degree).
+    Returns (min_lat, max_lat, min_lng, max_lng).
+    """
+    dlat = radius_km / 110.0
+    cos_lat = max(math.cos(math.radians(lat)), 0.01)
+    dlng = radius_km / (110.0 * cos_lat)
+    return (
+        max(lat - dlat, -90.0), min(lat + dlat, 90.0),
+        max(lng - dlng, -180.0), min(lng + dlng, 180.0),
+    )
+
+
+def haversine_expression(lat_field: str, lng_field: str, user_lat: float, user_lng: float):
+    """
+    Review N7: Haversine distance (km) as a database expression so filtering by
+    radius, ordering by distance and pagination all happen in the database.
+    Works on SQLite (Django registers the math functions) and PostgreSQL.
+    """
+    lat2 = Radians(Cast(F(lat_field), FloatField()))
+    lng2 = Radians(Cast(F(lng_field), FloatField()))
+    lat1 = math.radians(user_lat)
+    lng1 = math.radians(user_lng)
+    a = (
+        Power(Sin((lat2 - Value(lat1)) / Value(2.0)), 2)
+        + Value(math.cos(lat1)) * Cos(lat2) * Power(Sin((lng2 - Value(lng1)) / Value(2.0)), 2)
+    )
+    return ExpressionWrapper(
+        Value(2.0 * EARTH_RADIUS_KM) * ASin(Least(Sqrt(a), Value(1.0))),
+        output_field=FloatField(),
+    )
+
+
+def parse_radius(radius_km: Any) -> Optional[float]:
+    """Returns a positive radius in km, or None for '', 'all' or invalid input."""
+    if radius_km in (None, '', 'all'):
+        return None
+    try:
+        value = float(radius_km)
+    except (ValueError, TypeError):
+        return None
+    if math.isnan(value) or math.isinf(value) or value <= 0:
+        return None
+    return value
+
+
+def paginate(queryset_or_list, page: Any, per_page: int) -> Page:
+    paginator = Paginator(queryset_or_list, per_page)
+    try:
+        return paginator.page(page)
+    except PageNotAnInteger:
+        return paginator.page(1)
+    except EmptyPage:
+        return paginator.page(paginator.num_pages if paginator.num_pages > 0 else 1)
+
+
 def get_pharmacy_filter_options() -> Tuple[List[str], List[str]]:
     """
     Retrieves distinct approved pharmacy cities and pincodes for search filters.
@@ -113,62 +175,48 @@ def discover_nearby_pharmacies(
         qs = qs.filter(city__icontains=city.strip())
 
     if pincode:
-        qs = qs.filter(pincode__icontains=pincode.strip())
-
-    pharmacies_list: List[Pharmacy] = list(qs)
+        qs = qs.filter(pincode=pincode.strip())  # Review N14: exact match
 
     has_user_coords = is_valid_coordinate(user_lat, user_lng)
     user_coords_dict: Optional[Dict[str, float]] = None
 
+    # Review N7: filtering, distance, ordering and pagination run in the database.
     if has_user_coords:
         u_lat = float(user_lat)
         u_lng = float(user_lng)
         user_coords_dict = {'lat': u_lat, 'lng': u_lng}
+        qs = qs.annotate(distance_db=haversine_expression('latitude', 'longitude', u_lat, u_lng))
 
-        for p in pharmacies_list:
-            if is_valid_coordinate(p.latitude, p.longitude):
-                p.distance_km = calculate_haversine_distance(
-                    u_lat, u_lng, p.latitude, p.longitude
-                )
-            else:
-                p.distance_km = None
+        max_radius = parse_radius(radius_km)
+        if max_radius is not None:
+            min_lat, max_lat, min_lng, max_lng = bounding_box(u_lat, u_lng, max_radius)
+            qs = qs.filter(
+                latitude__gte=min_lat, latitude__lte=max_lat,
+                longitude__gte=min_lng, longitude__lte=max_lng,
+            ).filter(distance_db__lte=max_radius)
 
-        # Filter by radius if provided and valid
-        if radius_km not in (None, '', 'all'):
-            try:
-                max_radius = float(radius_km)
-                if max_radius > 0:
-                    pharmacies_list = [
-                        p for p in pharmacies_list
-                        if p.distance_km is not None and p.distance_km <= max_radius
-                    ]
-            except (ValueError, TypeError):
-                pass
-
-        # Sort by nearest distance first
         if sort_by == 'distance' or not sort_by:
-            pharmacies_list.sort(
-                key=lambda p: (
-                    p.distance_km is None,
-                    p.distance_km if p.distance_km is not None else float('inf'),
-                    p.pharmacy_name
-                )
-            )
+            qs = qs.order_by(F('distance_db').asc(nulls_last=True), 'pharmacy_name', 'pk')
         elif sort_by == 'name':
-            pharmacies_list.sort(key=lambda p: p.pharmacy_name.lower())
+            qs = qs.order_by(Lower('pharmacy_name'), 'pk')
         else:
-            pharmacies_list.sort(key=lambda p: p.created_at, reverse=True)
+            qs = qs.order_by('-created_at', 'pk')
     else:
-        for p in pharmacies_list:
-            p.distance_km = None
         if sort_by == 'name':
-            pharmacies_list.sort(key=lambda p: p.pharmacy_name.lower())
+            qs = qs.order_by(Lower('pharmacy_name'), 'pk')
         else:
-            pharmacies_list.sort(key=lambda p: p.created_at, reverse=True)
+            qs = qs.order_by('-created_at', 'pk')
 
-    # Prepare map pins for Leaflet.js
+    page_obj = paginate(qs, page, per_page)
+    total_results = page_obj.paginator.count
+
+    # Distances and map pins only for the current page (review N7).
     map_pins: List[Dict[str, Any]] = []
-    for p in pharmacies_list:
+    for p in page_obj:
+        if has_user_coords and is_valid_coordinate(p.latitude, p.longitude):
+            p.distance_km = calculate_haversine_distance(u_lat, u_lng, p.latitude, p.longitude)
+        else:
+            p.distance_km = None
         if is_valid_coordinate(p.latitude, p.longitude):
             map_pins.append({
                 'id': p.id,
@@ -177,20 +225,9 @@ def discover_nearby_pharmacies(
                 'phone': p.phone_number,
                 'lat': float(p.latitude),
                 'lng': float(p.longitude),
-                'distance_km': getattr(p, 'distance_km', None),
+                'distance_km': p.distance_km,
                 'is_approved': p.is_approved,
             })
-
-    total_results = len(pharmacies_list)
-
-    # Paginate results
-    paginator = Paginator(pharmacies_list, per_page)
-    try:
-        page_obj = paginator.page(page)
-    except PageNotAnInteger:
-        page_obj = paginator.page(1)
-    except EmptyPage:
-        page_obj = paginator.page(paginator.num_pages if paginator.num_pages > 0 else 1)
 
     logger.info(
         "Pharmacy discovery executed: query='%s', city='%s', pincode='%s', radius='%s', results=%d",
@@ -331,7 +368,9 @@ def get_pharmacy_detail_data(pharmacy_id: int, user) -> Tuple[Optional[Pharmacy]
         if not is_owner_or_admin:
             return pharmacy, None, None, False
 
-    inventory_items = Inventory.objects.filter(pharmacy=pharmacy).select_related('medicine').order_by('-updated_at')
+    inventory_items = Inventory.objects.filter(
+        pharmacy=pharmacy, medicine__is_active=True
+    ).select_related('medicine').order_by('-updated_at', 'pk')
 
     map_pin = None
     if is_valid_coordinate(pharmacy.latitude, pharmacy.longitude):  # review N8: keeps 0.0

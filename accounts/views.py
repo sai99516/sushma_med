@@ -10,6 +10,7 @@ from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.http import require_POST
 from pharmacies.services import apply_pharmacy_profile_update, get_pharmacy_for_user
 from requests_app.models import Notification
+from .context_processors import get_unread_count
 from .forms import CustomerRegistrationForm, PharmacyProfileForm, PharmacyRegistrationForm, UserProfileForm
 from .services import (
     authenticate_user,
@@ -192,7 +193,7 @@ def profile_view(request):
 def notifications_view(request):
     """Displays user notifications with read/unread filtering, unread counters, and pagination."""
     notifications_qs = Notification.objects.filter(user=request.user).order_by('-created_at')
-    unread_count = notifications_qs.filter(is_read=False).count()
+    unread_count = get_unread_count(request)  # review N39: shared with the context processor
 
     filter_type = request.GET.get('filter', '').strip().lower()
     if filter_type == 'unread':

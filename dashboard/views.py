@@ -3,6 +3,7 @@ from django.contrib import messages
 from django.contrib.auth import get_user_model
 from django.contrib.auth.decorators import login_required
 from django.shortcuts import redirect, render
+from accounts.context_processors import get_unread_count
 from accounts.decorators import admin_required, customer_required, pharmacy_required
 from pharmacies.services import get_pharmacy_for_user
 from .services import (
@@ -36,7 +37,7 @@ def dashboard_dispatcher_view(request):
 @customer_required
 def customer_dashboard_view(request):
     """Customer dashboard displaying inquiry metrics, recent activity, and notifications."""
-    context = get_customer_dashboard_metrics(request.user)
+    context = get_customer_dashboard_metrics(request.user, unread_count=get_unread_count(request))
     return render(request, 'dashboard/customer_dashboard.html', context)
 
 

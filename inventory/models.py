@@ -7,7 +7,7 @@ from pharmacies.models import Pharmacy
 class Inventory(models.Model):
     STATUS_CHOICES = (
         ('IN_STOCK', 'In Stock'),
-        ('LOW_STOCK', 'Low Stock (< 10 units)'),
+        ('LOW_STOCK', 'Low Stock (1–10 units)'),
         ('OUT_OF_STOCK', 'Out of Stock'),
     )
 
@@ -63,41 +63,37 @@ class Inventory(models.Model):
     def __str__(self):
         return f"{self.medicine.medicine_name} at {self.pharmacy.pharmacy_name}: {self.quantity} ({self.get_availability_status_display()})"
 
-    @property
-    def is_stale(self):
-        """Returns True if the inventory record has not been updated within 24 hours."""
-        import datetime
-        from django.utils import timezone
-        if not self.updated_at:
-            return False
-        return (timezone.now() - self.updated_at) > datetime.timedelta(hours=24)
+    # Review N20: ONE freshness rule used everywhere (public pages, pharmacy
+    # pages, map pins). Up to 24h = FRESH; 24-48h = MODERATE; over 48h = STALE.
+    # Anything older than 24h is "stale" in the sense that customers should
+    # confirm with the pharmacy before visiting.
+    FRESH_HOURS = 24
+    STALE_HOURS = 48
 
     @property
     def freshness_tier(self):
-        """
-        Classifies stock updates into three distinct clinical freshness tiers:
-        - 'FRESH': updated within 24 hours
-        - 'MODERATE': updated between 24 and 48 hours
-        - 'STALE': updated > 48 hours ago (requires customer inquiry to confirm)
-        """
         import datetime
         from django.utils import timezone
         if not self.updated_at:
             return 'STALE'
         elapsed = timezone.now() - self.updated_at
-        if elapsed <= datetime.timedelta(hours=24):
+        if elapsed <= datetime.timedelta(hours=self.FRESH_HOURS):
             return 'FRESH'
-        elif elapsed <= datetime.timedelta(hours=48):
+        elif elapsed <= datetime.timedelta(hours=self.STALE_HOURS):
             return 'MODERATE'
-        else:
-            return 'STALE'
+        return 'STALE'
+
+    @property
+    def is_stale(self):
+        """True when the last pharmacy report is older than 24 hours (same rule as freshness_tier)."""
+        return self.freshness_tier != 'FRESH'
 
     @property
     def freshness_label(self):
+        """Pharmacy-reported wording (review known #4): never claims live or verified stock."""
         tier = self.freshness_tier
         if tier == 'FRESH':
-            return 'Verified Fresh (< 24h)'
+            return 'Pharmacy-reported · updated within 24h'
         elif tier == 'MODERATE':
-            return 'Moderate (24-48h ago)'
-        else:
-            return 'Stale Stock (> 48h ago)'
+            return 'Pharmacy-reported · updated 24–48h ago · confirm before visiting'
+        return 'Pharmacy-reported · updated over 48h ago · confirm before visiting'

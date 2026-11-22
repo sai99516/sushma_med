@@ -64,8 +64,7 @@
     <div class="med-card p-4 mb-4">
       <h4 class="fw-bold mb-3 d-flex align-items-center justify-content-between">
         <span><i class="bi bi-hospital text-primary me-2"></i>Pharmacies With Reported Stock</span>
-        <span class="badge bg-light text-dark fs-6">{{ stock_records.count }} Location{{ stock_records.count|pluralize
-          }}</span>
+        <span class="badge bg-light text-dark fs-6">{{ stock_records|length }} Location{{ stock_records|length|pluralize }}</span>
       </h4>
 
       {% if stock_records %}
@@ -104,7 +103,7 @@
                 </span>
                 {% else %}
                 <span class="badge bg-success-subtle text-success-emphasis border border-success-subtle small">
-                  <i class="bi bi-check-circle me-1"></i>Fresh update
+                  <i class="bi bi-check-circle me-1"></i>Pharmacy-reported &middot; updated {{ item.updated_at|timesince }} ago
                 </span>
                 {% endif %}
               </div>

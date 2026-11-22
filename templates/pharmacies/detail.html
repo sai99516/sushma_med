@@ -66,7 +66,7 @@
     <div class="med-card p-4 mb-4">
       <h4 class="fw-bold mb-3 d-flex align-items-center justify-content-between">
         <span><i class="bi bi-boxes text-primary me-2"></i>Reported Medicine Inventory</span>
-        <span class="badge bg-light text-dark fs-6">{{ inventory_items.count }} Item{{ inventory_items.count|pluralize }}</span>
+        <span class="badge bg-light text-dark fs-6">{{ inventory_items.paginator.count }} Item{{ inventory_items.paginator.count|pluralize }}</span>
       </h4>
 
       {% if inventory_items %}
@@ -120,6 +120,15 @@
             </tbody>
           </table>
         </div>
+        {% if inventory_items.has_other_pages %}
+          <nav class="d-flex justify-content-between align-items-center small mt-2" aria-label="Stock pages">
+            <span class="text-muted">Page {{ inventory_items.number }} of {{ inventory_items.paginator.num_pages }}</span>
+            <span class="d-flex gap-2">
+              {% if inventory_items.has_previous %}<a class="btn btn-sm btn-med-outline" href="?page={{ inventory_items.previous_page_number }}">&larr; Previous</a>{% endif %}
+              {% if inventory_items.has_next %}<a class="btn btn-sm btn-med-outline" href="?page={{ inventory_items.next_page_number }}">Next &rarr;</a>{% endif %}
+            </span>
+          </nav>
+        {% endif %}
       {% else %}
         <div class="text-center py-4 text-muted">
           <p>No inventory records are currently published by this pharmacy.</p>
