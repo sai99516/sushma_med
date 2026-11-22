@@ -8,7 +8,9 @@ from django.db.models.functions import ASin, Cast, Cos, Least, Lower, Power, Rad
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from requests_app.models import Notification
-from .models import Pharmacy
+from .models import Pharmacy, PharmacyApprovalLog
+
+MAX_REASON_LENGTH = 500
 
 logger = logging.getLogger('medfind')
 
@@ -283,13 +285,15 @@ def _cancel_pending_requests_for_revoked(pharmacy: Pharmacy) -> int:
     return len(pending)
 
 
-def set_pharmacy_approval(pharmacy_id: int, approve: bool, admin_user) -> Tuple[Pharmacy, bool, str]:
+def set_pharmacy_approval(pharmacy_id: int, approve: bool, admin_user, reason: str = '') -> Tuple[Pharmacy, bool, str]:
     """
     Review N5/N24: explicitly sets approval (approve=True) or revokes it (approve=False).
     Idempotent: if the pharmacy is already in the wanted state nothing changes and
     no notification is sent. Runs in a transaction with a row lock.
+    F5: every change is stored in PharmacyApprovalLog; an optional reason is saved and sent to the owner.
     Returns (pharmacy, changed, message).
     """
+    reason = (reason or '').strip()[:MAX_REASON_LENGTH]
     with transaction.atomic():
         pharmacy = get_object_or_404(
             Pharmacy.objects.select_for_update().select_related('owner'), pk=pharmacy_id
@@ -301,8 +305,13 @@ def set_pharmacy_approval(pharmacy_id: int, approve: bool, admin_user) -> Tuple[
             return pharmacy, False, f"Pharmacy '{pharmacy.pharmacy_name}' is already {state}. No change made."
 
         # Note: revoking a PENDING application also records it as REVOKED (rejected).
+        previous = pharmacy.approval_status
         pharmacy.approval_status = target
         pharmacy.save(update_fields=['approval_status'])
+        PharmacyApprovalLog.objects.create(
+            pharmacy=pharmacy, from_status=previous, to_status=target,
+            changed_by=admin_user if getattr(admin_user, 'pk', None) else None, reason=reason,
+        )
 
         cancelled = 0
         if approve:
@@ -321,6 +330,8 @@ def set_pharmacy_approval(pharmacy_id: int, approve: bool, admin_user) -> Tuple[
             if cancelled:
                 result_msg += f" {cancelled} pending request(s) were cancelled and the customers notified."
 
+        if reason:
+            owner_msg += f" Reason: {reason}"
         Notification.objects.create(user=pharmacy.owner, message=owner_msg)
 
         logger.info(
@@ -344,6 +355,10 @@ def apply_pharmacy_profile_update(form, user) -> Tuple[Pharmacy, bool]:
             pharmacy.approval_status = Pharmacy.STATUS_PENDING
         pharmacy.save()
         if needs_reapproval:
+            PharmacyApprovalLog.objects.create(
+                pharmacy=pharmacy, from_status=Pharmacy.STATUS_APPROVED, to_status=Pharmacy.STATUS_PENDING,
+                changed_by=user, reason=f"Owner changed {', '.join(sensitive_changed)}"[:MAX_REASON_LENGTH],
+            )
             Notification.objects.create(
                 user=pharmacy.owner,
                 message=(

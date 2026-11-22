@@ -1,10 +1,23 @@
 from django.contrib import admin
-from .models import Pharmacy
+from .models import Pharmacy, PharmacyApprovalLog
 from .services import set_pharmacy_approval
+
+
+class PharmacyApprovalLogInline(admin.TabularInline):
+    """F5: read-only approval history on the pharmacy page."""
+    model = PharmacyApprovalLog
+    fields = ('created_at', 'from_status', 'to_status', 'changed_by', 'reason')
+    readonly_fields = fields
+    extra = 0
+    can_delete = False
+
+    def has_add_permission(self, request, obj=None):
+        return False
 
 
 @admin.register(Pharmacy)
 class PharmacyAdmin(admin.ModelAdmin):
+    inlines = [PharmacyApprovalLogInline]
     list_display = ('pharmacy_name', 'registration_number', 'city', 'state', 'phone_number', 'approval_status', 'created_at')
     list_filter = ('approval_status', 'city', 'state')
     search_fields = ('pharmacy_name', 'registration_number', 'city', 'pincode', 'phone_number')

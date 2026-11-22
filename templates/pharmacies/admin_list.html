@@ -77,10 +77,12 @@
               {% endif %}
             </td>
             <td class="text-end">
-              <form method="POST" action="{% url 'toggle_pharmacy_approval' p.id %}" class="d-inline">
+              <form method="POST" action="{% url 'toggle_pharmacy_approval' p.id %}" class="d-inline-flex gap-1 align-items-center">
                 {% csrf_token %}
                 {% if p.approval_status == 'APPROVED' %}
                   <input type="hidden" name="action" value="revoke">
+                  <input type="text" name="reason" maxlength="500" class="form-control form-control-sm" style="width: 160px;"
+                    placeholder="Reason (optional)" aria-label="Reason for revoking {{ p.pharmacy_name }}">
                   <button type="submit" class="btn btn-sm btn-outline-danger" title="Revoke Approval">
                     <i class="bi bi-x-circle me-1"></i> Revoke
                   </button>

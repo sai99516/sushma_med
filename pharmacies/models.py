@@ -129,3 +129,23 @@ class Pharmacy(models.Model):
 
     def __str__(self):
         return f"{self.pharmacy_name} - {self.city} ({self.get_approval_status_display()})"
+
+
+class PharmacyApprovalLog(models.Model):
+    """F5: one row per approval status change (who, when, from/to status, optional reason)."""
+    pharmacy = models.ForeignKey(Pharmacy, on_delete=models.CASCADE, related_name='approval_logs')
+    from_status = models.CharField(max_length=10, choices=Pharmacy.APPROVAL_STATUS_CHOICES)
+    to_status = models.CharField(max_length=10, choices=Pharmacy.APPROVAL_STATUS_CHOICES)
+    changed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name='+'
+    )
+    reason = models.CharField(max_length=500, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        verbose_name = "Approval history entry"
+        verbose_name_plural = "Approval history"
+        ordering = ['-created_at', '-pk']
+
+    def __str__(self):
+        return f"{self.pharmacy.pharmacy_name}: {self.from_status} -> {self.to_status}"

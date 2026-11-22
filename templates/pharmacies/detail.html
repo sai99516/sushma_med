@@ -23,7 +23,7 @@
           </span>
         {% else %}
           <span class="badge bg-warning-subtle text-warning border border-warning-subtle rounded-pill">
-            Pending Approval
+            {{ pharmacy.get_approval_status_display }}
           </span>
         {% endif %}
       </div>
@@ -50,6 +50,22 @@
         <div class="border-top pt-3 mb-3">
           <label class="small text-muted fw-bold">Geographic Coordinates</label>
           <p class="small text-muted mb-0">Lat: {{ pharmacy.latitude }}, Lng: {{ pharmacy.longitude }}</p>
+        </div>
+      {% endif %}
+
+      {% if approval_history is not None %}
+        <!-- F5: approval history, owner and admins only -->
+        <div class="border-top pt-3 mb-3">
+          <label class="small text-muted fw-bold">Approval history</label>
+          {% for log in approval_history %}
+            <div class="small mt-2">
+              <span class="fw-semibold">{{ log.get_from_status_display }} &rarr; {{ log.get_to_status_display }}</span>
+              <span class="text-muted">&middot; {{ log.created_at|date:"M d, Y h:i A" }}{% if log.changed_by %} &middot; {{ log.changed_by.username }}{% endif %}</span>
+              {% if log.reason %}<div class="text-muted fst-italic">{{ log.reason }}</div>{% endif %}
+            </div>
+          {% empty %}
+            <p class="small text-muted mb-0">No approval changes recorded yet.</p>
+          {% endfor %}
         </div>
       {% endif %}
 

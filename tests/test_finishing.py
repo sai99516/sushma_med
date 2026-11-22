@@ -99,3 +99,74 @@ class SplitTemplateTagTests(TestCase):
         for path in (Path(settings.BASE_DIR) / 'templates').rglob('*.html'):
             for n, line in enumerate(path.read_text().splitlines(), 1):
                 self.assertIsNone(re.search(r'\{\{[^}]*$', line), f'{path}:{n} has a split {{{{ }}}} tag')
+
+
+class ApprovalHistoryTests(TestCase):
+    """F5: approval changes are stored with who, when, the old/new status and an optional reason."""
+
+    def setUp(self):
+        from accounts.models import User
+        self.admin = User.objects.create_user(username='boss', email='b@t.test', password='x', role='ADMIN')
+        self.pharmacy = _pharmacy('own', 'History Pharmacy', 17.4, 78.4, approved=False)
+
+    def logs(self):
+        from pharmacies.models import PharmacyApprovalLog
+        return list(PharmacyApprovalLog.objects.filter(pharmacy=self.pharmacy).order_by('pk'))
+
+    def test_approve_then_revoke_with_reason_is_logged(self):
+        from pharmacies.services import set_pharmacy_approval
+        set_pharmacy_approval(self.pharmacy.pk, True, self.admin)
+        set_pharmacy_approval(self.pharmacy.pk, False, self.admin, reason='Licence expired')
+        logs = self.logs()
+        self.assertEqual([(l.from_status, l.to_status) for l in logs],
+                         [('PENDING', 'APPROVED'), ('APPROVED', 'REVOKED')])
+        self.assertEqual(logs[1].reason, 'Licence expired')
+        self.assertEqual(logs[1].changed_by, self.admin)
+
+    def test_reason_is_sent_to_the_owner(self):
+        from pharmacies.services import set_pharmacy_approval
+        from requests_app.models import Notification
+        set_pharmacy_approval(self.pharmacy.pk, False, self.admin, reason='Licence expired')
+        msg = Notification.objects.filter(user=self.pharmacy.owner).latest('pk').message
+        self.assertIn('Licence expired', msg)
+
+    def test_no_log_when_nothing_changes(self):
+        from pharmacies.services import set_pharmacy_approval
+        set_pharmacy_approval(self.pharmacy.pk, True, self.admin)
+        set_pharmacy_approval(self.pharmacy.pk, True, self.admin)
+        self.assertEqual(len(self.logs()), 1)
+
+    def test_profile_edit_back_to_pending_is_logged(self):
+        from pharmacies.forms import PharmacyEditForm
+        from pharmacies.services import apply_pharmacy_profile_update, set_pharmacy_approval
+        set_pharmacy_approval(self.pharmacy.pk, True, self.admin)
+        self.pharmacy.refresh_from_db()
+        data = {f: getattr(self.pharmacy, f) for f in PharmacyEditForm.Meta.fields}
+        data['address'] = 'New Road 9'
+        form = PharmacyEditForm(data, instance=self.pharmacy)
+        self.assertTrue(form.is_valid(), form.errors)
+        apply_pharmacy_profile_update(form, self.pharmacy.owner)
+        last = self.logs()[-1]
+        self.assertEqual((last.from_status, last.to_status), ('APPROVED', 'PENDING'))
+        self.assertEqual(last.changed_by, self.pharmacy.owner)
+        self.assertIn('address', last.reason)
+
+    def test_revoke_form_reason_is_saved_and_trimmed(self):
+        from django.urls import reverse
+        from pharmacies.services import set_pharmacy_approval
+        set_pharmacy_approval(self.pharmacy.pk, True, self.admin)
+        self.client.login(username='boss', password='x')
+        self.client.post(reverse('toggle_pharmacy_approval', args=[self.pharmacy.pk]),
+                         {'action': 'revoke', 'reason': '  ' + 'x' * 600})
+        self.assertEqual(len(self.logs()[-1].reason), 500)
+
+    def test_history_visible_to_owner_and_admin_only(self):
+        from django.urls import reverse
+        from pharmacies.services import set_pharmacy_approval
+        set_pharmacy_approval(self.pharmacy.pk, True, self.admin)
+        url = reverse('pharmacy_detail', args=[self.pharmacy.pk])
+        self.assertNotContains(self.client.get(url), 'Approval history')        # public
+        self.client.login(username='boss', password='x')
+        self.assertContains(self.client.get(url), 'Approval history')           # admin
+        self.client.force_login(self.pharmacy.owner)
+        self.assertContains(self.client.get(url), 'Approval history')           # owner

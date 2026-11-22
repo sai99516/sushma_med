@@ -94,11 +94,14 @@ def pharmacy_detail_view(request, pk):
     )
     # Review N39: paginate the stock list (database-side).
     inventory_page = paginate(inventory_items, request.GET.get('page', 1), 20)
+    # F5: approval history for the owner and admins only (same rule as the licence number).
+    approval_history = pharmacy.approval_logs.select_related('changed_by')[:20] if can_see_licence else None
     return render(request, 'pharmacies/detail.html', {
         'pharmacy': pharmacy,
         'inventory_items': inventory_page,
         'map_pin': map_pin,
         'can_see_licence': can_see_licence,
+        'approval_history': approval_history,
     })
 
 
@@ -192,7 +195,8 @@ def toggle_pharmacy_approval_view(request, pk):
     if action not in ('approve', 'revoke'):
         messages.error(request, "Invalid approval action.")
         return redirect('admin_pharmacy_list')
-    pharmacy, changed, msg = set_pharmacy_approval(pk, action == 'approve', request.user)
+    reason = request.POST.get('reason', '')
+    pharmacy, changed, msg = set_pharmacy_approval(pk, action == 'approve', request.user, reason=reason)
     if changed:
         messages.success(request, msg)
     else:
