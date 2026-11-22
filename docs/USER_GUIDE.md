@@ -2,7 +2,7 @@
 
 **Purpose:** What each kind of user can do in MediFind, and the rules the code enforces.
 **Who it is for:** Beginners, testers and examiners who want to understand the app before reading code.
-**Last verified:** 2026-11-22 against commit `dd2f32c`.
+**Last verified:** 2026-11-22 against commit `513e68f`.
 
 MediFind helps people find out which nearby pharmacy **reports** having a medicine.
 Stock is typed in by the pharmacy itself ("pharmacy-reported"). The app does not check it,
@@ -38,7 +38,8 @@ Who may open which page is listed in [ROLE_PERMISSION_MATRIX.md](ROLE_PERMISSION
   - 10 results per page, with a list view and a map view.
   - Only **approved** pharmacies and **active** (not archived) medicines appear.
 - **Medicine detail** (`/medicines/<id>/`): every approved pharmacy that lists the medicine, in the same
-  stock order, plus a map. It shows no distances.
+  stock order, plus a map. "Use my location" adds the distance to each pharmacy and sorts nearest first
+  ("Sort by stock" switches back). Opening a medicine from a search that used your location keeps it.
 - **Pharmacy directory** (`/pharmacies/`): search by pharmacy name or address, city, pincode and
   radius. Sort by distance (needs location), name or newest. 9 per page, with a map.
 - **Pharmacy detail** (`/pharmacies/<id>/`): address, phone, map and stock list (20 per page). A pharmacy
@@ -76,6 +77,7 @@ the database stores UTC.
   result opens `/requests/create/<pharmacy_id>/<medicine_id>/`. Rules (`requests_app/services.py:23`,
   `requests_app/forms.py`):
   - the pharmacy must be approved and must list the medicine (any quantity);
+  - only **customer** accounts can send requests (admins are redirected);
   - quantity 1 to 1000, optional note up to 1000 characters;
   - no second **pending** request for the same medicine at the same pharmacy;
   - at most 10 new requests per 60 minutes per customer.
@@ -91,7 +93,8 @@ the database stores UTC.
 PENDING ──(pharmacy confirms)──> CONFIRMED     (final)
    │   ──(pharmacy declines)──> UNAVAILABLE   (final)
    │   ──(customer cancels)───> CANCELLED     (final)
-   └──(admin revokes the pharmacy)──> CANCELLED, with an automatic note
+   ├──(admin revokes the pharmacy)──> CANCELLED, with an automatic note
+   └──(pharmacy deletes that stock row)──> CANCELLED, with an automatic note
 ```
 
 A request is **answered once**: only a PENDING request can change. The change is a conditional
@@ -108,7 +111,8 @@ same moment cannot overwrite each other (`requests_app/services.py:108`).
   The owner can still log in and prepare stock.
 - **Inventory** (`/inventory/`): add a medicine from the active catalogue with a quantity. If it is
   already listed, the new number **replaces** the old one ("Set quantity"). Edit the quantity, delete a
-  row (a confirm page, then POST). Search, filter by status and sort by last update, name or quantity.
+  row (a confirm page, then POST). Deleting a row cancels that medicine's pending requests at this
+  pharmacy and notifies the customers. Search, filter by status and sort by last update, name or quantity.
 - **Request inbox** (`/requests/pharmacy-inbox/`, shows Pending by default): open a pending request,
   choose "Confirm Medicine Available for Pickup" or "Report Medicine Unavailable / Out of Stock" and add a message (up to 1000 characters). The customer is notified.
   After that the inbox shows "Answered" instead of "Respond". A cancelled request cannot be answered.
@@ -116,7 +120,7 @@ same moment cannot overwrite each other (`requests_app/services.py:108`).
   recent requests.
 - **Profile changes** (`/pharmacies/profile/edit/` or the profile page): if an **approved** pharmacy
   changes its name, address, city, pincode, latitude or longitude, it goes back to **Pending**, is hidden
-  from search and the owner is notified (`pharmacies/services.py:333`). Changing only the phone or state
+  from search and the owner is notified (`pharmacies/services.py:344`). Changing only the phone or state
   keeps it approved.
 - A **revoked** pharmacy is hidden from the public and cannot add, edit or delete stock or answer requests.
 
@@ -134,8 +138,12 @@ same moment cannot overwrite each other (`requests_app/services.py:108`).
   ```
 
   Approve and Revoke are separate buttons. Clicking one twice changes nothing the second time
-  ("already approved"). Revoking cancels the pharmacy's pending requests and notifies those customers and
-  the owner (`pharmacies/services.py:286`). There is no stored approval history and no rejection reason.
+  ("already approved"). Revoke has an optional **reason** (up to 500 characters) that is added to the
+  owner's notification. Revoking cancels the pharmacy's pending requests and notifies those customers and
+  the owner (`pharmacies/services.py:288`).
+- **Approval history:** every status change (approve, revoke, and "back to Pending" after an owner edit)
+  is stored with who, when, the old and new status and the reason. The owner and admins see it on the
+  pharmacy page; it is also read-only in Django admin.
 - **Medicine catalogue** (`/medicines/manage/`): add and edit medicines. Name + strength + dosage form
   must be unique (ignoring case). Medicines are **archived** (untick "Active"), not deleted; archived
   medicines disappear from search, the detail page, the add-stock form and new requests.
@@ -155,6 +163,7 @@ same moment cannot overwrite each other (`requests_app/services.py:108`).
 | New availability request | the pharmacy owner |
 | Request confirmed / unavailable | the customer |
 | Pharmacy revoked while requests are pending | each affected customer |
+| Pharmacy deletes a stock row with pending requests | each affected customer |
 
 Notifications are in-app only. There are no emails or SMS for these events; email is used only for
 password reset.
@@ -162,8 +171,8 @@ password reset.
 ## 7. Demo data (local only)
 
 `python manage.py seed_data` refuses to run unless `DEBUG=True`. It creates:
-6 pharmacies in Hyderabad, Bengaluru and New Delhi (5 approved, 1 pending: "[DEMO] Metro Life Pharmacy
-(Pending Review)"), 31 medicines, 69 stock rows (some backdated by 30, 60 and 72 hours to show the
+6 pharmacies in Hyderabad, Bengaluru and New Delhi (5 approved, 1 pending: "[DEMO] Metro Life Pharmacy"),
+31 medicines, 69 stock rows (some backdated by 30, 60 and 72 hours to show the
 freshness badges), 4 requests and these logins:
 
 | Role | Username | Password |

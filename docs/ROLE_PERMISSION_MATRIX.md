@@ -2,7 +2,7 @@
 
 **Purpose:** Who can open each URL, and what happens to everyone else.
 **Who it is for:** Developers changing views, testers, and examiners asking about access control.
-**Last verified:** 2026-11-22 against commit `dd2f32c` (URL list from `config/urls.py` and each app's `urls.py`).
+**Last verified:** 2026-11-22 against commit `513e68f` (URL list from `config/urls.py` and each app's `urls.py`).
 
 ## 1. Roles
 
@@ -30,8 +30,8 @@ On top of the role check, every query for private data includes the owner, for e
 returns **404 Not Found**, not someone else's data. This is called object-level ("tenant") isolation.
 
 Admins pass `@pharmacy_required`, but they have no pharmacy, so pharmacy pages redirect them with
-"No pharmacy record found" (or 404 for edit/delete/respond of a specific row). Admins **can** use
-customer pages, including sending availability requests (a known, accepted choice).
+"No pharmacy record found" (or 404 for edit/delete/respond of a specific row). Admins can open the
+customer pages, but the request form checks the role again: only customers can send requests.
 
 ## 3. URL table
 
@@ -45,7 +45,7 @@ V = visitor (not logged in), C = customer, P = pharmacy owner, A = admin.
 | `/medicines/search/` | all | Approved pharmacies and active medicines only |
 | `/medicines/<id>/` | all | Archived medicine → 404 |
 | `/pharmacies/` | all | Approved pharmacies only |
-| `/pharmacies/<id>/` | all; non-approved pharmacy: its owner and admins | Others are redirected to search with "pending administrative verification" |
+| `/pharmacies/<id>/` | all; non-approved pharmacy: its owner and admins | Others are redirected to search with "pending administrative verification". Licence number and approval history: owner and admins only |
 | `/accounts/register/customer/`, `/accounts/register/pharmacy/` | V | Logged-in users are redirected to `/dashboard/` |
 | `/accounts/login/` | V | Logged-in users are redirected to `/dashboard/`. Rate limited (see [SECURITY_FINAL_REVIEW.md](SECURITY_FINAL_REVIEW.md)) |
 | `/accounts/logout/` | logged-in | POST only; GET → 405 |
@@ -69,7 +69,7 @@ V = visitor (not logged in), C = customer, P = pharmacy owner, A = admin.
 
 | URL | Who | Notes |
 |---|---|---|
-| `/requests/create/<pharmacy_id>/<medicine_id>/` | C, A | Pharmacy not approved or medicine archived → 404; an owner cannot request from their own pharmacy |
+| `/requests/create/<pharmacy_id>/<medicine_id>/` | C | Admins are redirected to their dashboard ("Only customer accounts can send availability requests"); pharmacy not approved or medicine archived → 404 |
 | `/requests/my-requests/` | C, A | Own requests only |
 | `/requests/<id>/cancel/` | C, A | POST only; another customer's request → 404; only PENDING can be cancelled |
 
@@ -80,7 +80,7 @@ V = visitor (not logged in), C = customer, P = pharmacy owner, A = admin.
 | `/inventory/` | P | Own stock only |
 | `/inventory/add/` | P | Blocked for a revoked pharmacy |
 | `/inventory/<id>/edit/` | P | Another pharmacy's row → 404; blocked when revoked |
-| `/inventory/<id>/delete/` | P | GET shows a confirm page, POST deletes; another pharmacy's row → 404; blocked when revoked |
+| `/inventory/<id>/delete/` | P | GET shows a confirm page, POST deletes and cancels that medicine's pending requests; another pharmacy's row → 404; blocked when revoked |
 | `/requests/pharmacy-inbox/` | P | Own pharmacy's requests only |
 | `/requests/<id>/respond/` | P | Another pharmacy's request → 404; only PENDING can be answered; blocked when revoked |
 | `/pharmacies/profile/edit/` | P | Sensitive changes send an approved pharmacy back to Pending |
@@ -90,13 +90,13 @@ V = visitor (not logged in), C = customer, P = pharmacy owner, A = admin.
 | URL | Who | Notes |
 |---|---|---|
 | `/pharmacies/manage/list/` | A | `?status=pending|approved|revoked`, search |
-| `/pharmacies/manage/<id>/toggle-approval/` | A | POST only, with `action=approve` or `action=revoke`. The old URL name is kept; each button sets one state |
+| `/pharmacies/manage/<id>/toggle-approval/` | A | POST only, with `action=approve` or `action=revoke` and an optional `reason`. The old URL name is kept; each button sets one state |
 | `/pharmacies/manage/users/` | A | Customers and pharmacy owners (admins are not listed) |
 | `/pharmacies/manage/requests/` | A | All requests, filter by status, search |
 | `/medicines/manage/`, `/medicines/add/`, `/medicines/<id>/edit/` | A | Catalogue; archive by unticking "Active" (there is no delete page) |
 | `/admin/` | users with `is_staff` | Django admin. The seeded `admin` user is staff and superuser |
 
-That is 40 app URLs. In DEBUG mode Django also serves `/media/` files; the app has no uploads.
+That is 40 app URLs. Any other URL returns the 404 page.
 
 ## 4. Business rules that also limit access
 

@@ -2,20 +2,20 @@
 
 **Purpose:** How to run the tests, what each test file covers, and the latest recorded results.
 **Who it is for:** Developers before a commit, and examiners asking "how did you test it?".
-**Last verified:** 2026-11-22 against commit `dd2f32c`. Counts come from `grep -c "def test_" tests/*.py`
-and `pytest e2e --collect-only`. The results in section 4 are the runs recorded in `MEDIFIND_REVIEW.md`; they were not re-run for this doc.
+**Last verified:** 2026-11-22 against commit `513e68f`. Counts come from `grep -c "def test_" tests/*.py`
+and `pytest e2e --collect-only`; the results in section 4 were run on that commit.
 
 There are two kinds of tests:
 
-- **Unit/integration tests** (`tests/`, 160 tests in 15 files): Django's test client sends requests to the
+- **Unit/integration tests** (`tests/`, 178 tests in 16 files): Django's test client sends requests to the
   views and checks responses and database rows. They use a fresh test database each run.
-- **End-to-end browser tests** (`e2e/`, 68 tests in 7 files): a real Chromium browser (driven by Playwright)
+- **End-to-end browser tests** (`e2e/`, 69 tests in 7 files): a real Chromium browser (driven by Playwright)
   clicks through the running app like a user.
 
 ## 1. Run the unit tests
 
 ```bash
-python manage.py test tests                     # all 160
+python manage.py test tests                     # all 178
 python manage.py test tests.test_security       # one file
 ```
 
@@ -41,10 +41,11 @@ What `e2e/conftest.py` does:
 
 ## 3. What the tests cover
 
-### `tests/` (160)
+### `tests/` (178)
 
 | File | Tests | Covers |
 |---|---|---|
+| `test_finishing.py` | 18 | Finishing changes F1–F8: seed name, medicine-page distances, split template tags, approval history and reason, stock delete cancels requests, customer-only requests, 404/500 pages |
 | `test_features.py` | 17 | Core flows: registration, login, stock status, search, distance, requests, cancel, approval, catalogue, role guards, notifications |
 | `test_admin_portal.py` | 16 | Admin dashboard, pharmacy list filters/search/pagination, approve/revoke, users, request monitor |
 | `test_auth_profile.py` | 15 | Registration rules, login/logout, profile, password change/reset |
@@ -61,11 +62,11 @@ What `e2e/conftest.py` does:
 | `test_demo_logins.py` | 2 | Demo logins shown only with DEBUG=True |
 | `test_regressions_e2e.py` | 2 | Browser-found bugs E1 (admin script) and E2 (quantity input min/max) |
 
-### `e2e/` (68)
+### `e2e/` (69)
 
 | File | Tests | Covers |
 |---|---|---|
-| `test_visitor.py` | 15 | Home, search filters and order, pagination, geolocation allowed/denied, maps, detail pages, stale badge, 375px and 1280px layouts |
+| `test_visitor.py` | 16 | Home, search filters and order, pagination, geolocation allowed/denied, maps, detail pages, "Use my location" on the medicine page, stale badge, 375px and 1280px layouts |
 | `test_auth.py` | 13 | Registration (valid and invalid), login, lockout, Sign Out, password reset via the console email, profile, change password |
 | `test_security.py` | 19 | Stored XSS payload on map and admin pages, 12 direct-URL role checks, cross-pharmacy 404s, `/admin/` for a customer, GET logout 405 |
 | `test_pharmacy.py` | 9 | Dashboard and chart, stock add/set/delete, inbox answer once, re-approval after address change, revoked pharmacy |
@@ -73,12 +74,14 @@ What `e2e/conftest.py` does:
 | `test_customer.py` | 5 | Request rules (duplicate, quantity 0 and 1001), tabs, cancel dialog, notifications |
 | `test_00_demo_script.py` | 1 | The 5-minute demo from `MEDIFIND_PRESENTATION.md` |
 
-## 4. Latest recorded results (from `MEDIFIND_REVIEW.md`, 2026-11-22)
+## 4. Latest results (commit `513e68f`, 2026-11-22)
 
-- Unit tests: **160 tests, all passed** (after the E1/E2 fixes).
-- Browser tests: first full run 68 tests, 67 passed, 1 failed (E1, a console error from Django admin's
-  script). After the fixes the failed test and the changed customer test passed; the full browser suite
-  was not re-run.
+- Unit tests: **178 tests, all passed** (`python manage.py test tests`, about 73 s).
+- Browser tests: **69 tests, all passed** (`python -m pytest e2e`, about 2 minutes).
+- `python -m ruff check .`: no issues. `makemigrations --check`: no changes.
+- Earlier runs and the bugs they found are in `MEDIFIND_REVIEW.md`.
+- CI (`.github/workflows/ci.yml`) runs the same steps on GitHub; it has not run yet because the repo has
+  no GitHub remote.
 - Not tested in the browser: real email delivery, Firefox/Safari engines, real map tiles, the 10-per-hour
   request limit and the 20-per-IP login limit (both covered by unit tests), and production settings.
 

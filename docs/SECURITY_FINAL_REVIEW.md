@@ -2,7 +2,7 @@
 
 **Purpose:** The security controls in the code today, where they live, and the known gaps.
 **Who it is for:** Developers, reviewers and examiners asking "is it secure?".
-**Last verified:** 2026-11-22 against commit `dd2f32c`.
+**Last verified:** 2026-11-22 against commit `513e68f`.
 
 No external penetration test has been done. The list below is what the code does, checked by reading
 it and by the tests named at the end. For the history of every finding and fix, see
@@ -75,21 +75,21 @@ to the app's admin portal.
   (it creates `admin/admin123`).
 - The pharmacy licence number is shown only to the owner and admins, and is not searchable publicly.
 - Pages for non-approved pharmacies are hidden from the public.
-- Users see generic error messages; details go to the server log with `logger.exception`.
+- Users see generic error messages; details go to the server log with `logger.exception`. With DEBUG
+  off, unknown pages and server errors show the app's own `404.html` / `500.html`, never a traceback.
+- Approval changes are stored with who made them (`PharmacyApprovalLog`); only the owner and admins can see them.
   The registration log line has the username and id, not the email.
 
 ## 7. Known gaps (honest list)
 
 - The login rate limit is per process (local-memory cache).
 - No Content-Security-Policy header, no two-factor login.
-- No stored audit trail for approvals and no rejection reason (only log lines and notifications).
-- Admins can send availability requests (they pass the customer check by design).
-- Deleting a stock row leaves that medicine's pending requests open.
 - Stock data is self-reported and cannot be verified by the app.
 
 ## 8. Tests that cover security
 
 `tests/test_security.py` (role access, tenant isolation, GET rejected on POST-only URLs, weak passwords,
-logout), `tests/test_xss_map_popups.py`, `tests/test_demo_logins.py`, `tests/test_regressions_pass3.py`
+logout), `tests/test_finishing.py` (approval history visibility, customer-only requests),
+`tests/test_xss_map_popups.py`, `tests/test_demo_logins.py`, `tests/test_regressions_pass3.py`
 (rate limiter and proxy IP), and the browser tests in `e2e/test_security.py` (stored XSS on the 4 map pages, the home
 page and the admin pending pages; 12 direct-URL cases, cross-pharmacy 404s, GET logout 405). How to run them: [TESTING_REPORT.md](TESTING_REPORT.md).

@@ -2,7 +2,7 @@
 
 **Purpose:** Project overview, local setup, tests and deployment in short.
 **Who it is for:** Anyone opening the project for the first time.
-**Last verified:** 2026-11-22 against commit `dd2f32c`.
+**Last verified:** 2026-11-22 against commit `513e68f`.
 
 MediFind is a Django web app that helps people find medicines at nearby pharmacies.
 
@@ -11,8 +11,8 @@ MediFind is a Django web app that helps people find medicines at nearby pharmaci
   availability request to a pharmacy. A pharmacy answers each request once.
 - **Pharmacy owners** register (one pharmacy per owner), wait for admin approval,
   keep their stock up to date and answer requests.
-- **Admins** approve or revoke pharmacies, manage (and archive) the medicine
-  catalogue and monitor requests.
+- **Admins** approve or revoke pharmacies (with a stored history and optional
+  reason), manage (and archive) the medicine catalogue and monitor requests.
 
 Stock shown is reported by pharmacies. It is not a reservation and not medical advice.
 
@@ -61,13 +61,15 @@ python manage.py seed_data
 ## Running the tests
 
 ```bash
-python manage.py test tests            # 160 unit/integration tests
+python manage.py test tests            # 178 unit/integration tests
 
-pip install -r requirements-dev.txt    # browser tests (68, Playwright + Chromium)
+pip install -r requirements-dev.txt    # browser tests (69, Playwright + Chromium) and ruff
 python -m playwright install chromium
 python -m pytest e2e                   # builds its own temporary database
+python -m ruff check .                 # lint
 ```
 
+GitHub Actions (`.github/workflows/ci.yml`) runs all of this on every push.
 Details: `docs/TESTING_REPORT.md`.
 
 ## Deploying to Render
@@ -92,8 +94,6 @@ See `.env.production.example` for every production variable.
 - Login rate limiting uses Django's local-memory cache, so it is per process
   (not shared between several gunicorn workers or instances).
 - In-app notifications only; no email/SMS notifications for requests.
-- No audit trail or rejection reason for approvals (only log lines).
-- The medicine detail page does not show distances.
 - The project has no backup script; check what your Render database plan offers.
 
 ## Documentation

@@ -2,7 +2,7 @@
 
 **Purpose:** How to run MediFind locally and what every environment variable does, with its real default.
 **Who it is for:** Anyone setting up the project for the first time or configuring a server.
-**Last verified:** 2026-11-22 against commit `dd2f32c` (`config/settings.py`, `.env.example`, `.env.production.example`, `requirements.txt`).
+**Last verified:** 2026-11-22 against commit `513e68f` (`config/settings.py`, `.env.example`, `.env.production.example`, `requirements.txt`).
 
 ## 1. Local setup
 
@@ -22,8 +22,9 @@ python manage.py runserver         # open http://127.0.0.1:8000
 automatically. Real environment variables win over `.env`.
 
 **Packages** (`requirements.txt`, exact versions): Django 5.2.19, asgiref, sqlparse, python-dotenv,
-gunicorn, whitenoise, dj-database-url, psycopg2-binary. Test-only packages (pytest, playwright,
-pytest-playwright) are in `requirements-dev.txt`, which also includes `requirements.txt`.
+gunicorn, whitenoise, dj-database-url, psycopg2-binary. Development-only packages (pytest, playwright,
+pytest-playwright and the ruff linter) are in `requirements-dev.txt`, which also includes `requirements.txt`.
+Lint with `python -m ruff check .` (settings in `ruff.toml`).
 
 ## 2. Environment variables
 

@@ -2,7 +2,7 @@
 
 **Purpose:** How to deploy MediFind to Render with the files in this repo, how to check it, and how to back up the data.
 **Who it is for:** Whoever puts the app online.
-**Last verified:** 2026-11-22 against commit `dd2f32c` (`render.yaml`, `build.sh`, `Procfile`, `config/settings.py`). Not yet deployed from this commit.
+**Last verified:** 2026-11-22 against commit `513e68f` (`render.yaml`, `build.sh`, `Procfile`, `config/settings.py`). Not yet deployed from this commit.
 
 ## 1. What is in the repo
 
@@ -12,6 +12,8 @@
 | `build.sh` | Runs on every deploy: `pip install -r requirements.txt`, `collectstatic --no-input`, `migrate --no-input` |
 | start command | `gunicorn config.wsgi:application` (in `render.yaml`; the `Procfile` has the same command for other hosts) |
 | `.env.production.example` | Every production variable with placeholders |
+| `.github/workflows/ci.yml` | GitHub Actions: lint, Django checks and both test suites on every push (runs once the repo is on GitHub) |
+| `templates/404.html`, `templates/500.html` | Error pages shown when DEBUG is False |
 
 ## 2. Steps
 

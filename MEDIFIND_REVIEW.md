@@ -452,3 +452,31 @@ Not bugs (checked): latitude/longitude inputs have no `min`/`max`, but the serve
 | E2 | `requests_app/forms.py`: the quantity widget no longer sets `min`/`value` in `Meta`; `__init__` sets `min="1"` and `max="1000"`, and the initial value 1 comes from the model default. The input now renders once with `min="1" max="1000" value="1"`, so the browser blocks 0 and 1001; the server checks are unchanged. | `tests/test_regressions_e2e.py::RequestQuantityInputTests`; e2e `test_request_availability_valid_duplicate_and_bad_quantities` now also expects the browser to block 0 and 1001 | `ad222a3` |
 
 **Re-run after the fixes:** the failed e2e test (`test_django_admin_login`) and the changed customer test passed. The full e2e suite was not re-run. Normal suite `manage.py test tests`: **160 tests, all passed** (158 before plus the 2 new regression tests).
+
+## Finishing changes
+
+Branch `feat/finishing` (from `main`, 2026-11-22). Small features and fixes to finish the project before
+submission. One commit per item; each item with behaviour has a test that failed before the change
+(`tests/test_finishing.py`, 18 tests).
+
+| ID | Change | Test | Commit |
+|---|---|---|---|
+| F1 | Seeded pending pharmacy renamed to "[DEMO] Metro Life Pharmacy" (the name said "(Pending Review)" even after approval) | `SeedPendingPharmacyNameTests` | `a79c170` |
+| F2 | Removed the unused logo SVGs and the media/upload settings (the app has no uploads) | – (deletions; `manage.py check` and related tests) | `74431a5` |
+| F3 | Medicine detail page: "Use my location", distance per pharmacy, nearest-first sort, user pin on the map; the search page passes the location on. Closes "medicine detail distances" (previously Skipped) | `MedicineDetailDistanceTests`; e2e `test_medicine_detail_use_my_location` (`513e68f`) | `7953c06` |
+| F4 | **Bug found while doing F3:** two `{{ }}` tags were split over two lines, so Django printed them as raw text: the navbar role badge for every logged-in user, and "({{ item.updated_at\|timesince }} ago)" on the medicine detail page | `SplitTemplateTagTests` (also scans every template) | `7cb70f9` |
+| F5 | Approval history: new `PharmacyApprovalLog` (migration `pharmacies.0006`) with who, when, from/to status and an optional reason (max 500). Revoke has a reason field; the reason goes into the owner's notification; re-approval after an owner edit is logged too. Shown to the owner and admins on the pharmacy page and read-only in Django admin. The detail badge shows the real status. Closes "approval audit trail / rejection reason" (previously Open) | `ApprovalHistoryTests` | `28b284a` |
+| F6 | Deleting a stock row cancels that medicine's PENDING requests at that pharmacy and notifies the customers; the confirm page warns about it. Closes P12 (previously Skipped) | `DeleteStockCancelsRequestsTests` | `41a56e4` |
+| F7 | Only customer accounts can send availability requests; admins are redirected. Closes P11 (previously Skipped) | `OnlyCustomersSendRequestsTests` | `b41c3df` |
+| F8 | Custom `404.html` (site layout) and standalone `500.html` | `ErrorPageTests` | `efed2d6` |
+| F9 | `ruff.toml` and ruff in `requirements-dev.txt` (unused imports were removed earlier in `9a6210b`) | `ruff check .` passes | `b8525cf` |
+| F10 | GitHub Actions CI: ruff, `check`, `makemigrations --check`, unit tests, then browser tests (screenshots uploaded on failure) | – (YAML parsed; not run yet, no GitHub remote) | `4cf6dde` |
+
+**Results on `513e68f`:** unit tests 178/178 passed; browser tests 69/69 passed; ruff clean;
+`makemigrations --check` no changes. **New migration to run on deploy:** `pharmacies.0006_pharmacyapprovallog`
+(`build.sh` runs `migrate`).
+
+**Still open:** login rate limit is per process; no Content-Security-Policy header; N25 kept by decision;
+Django 6.x upgrade not done (5.2.19 is the latest 5.2 LTS release).
+
+Docs updated to this state: `README.md`, `docs/*.md`, `MEDIFIND_PRESENTATION.md` (main text).

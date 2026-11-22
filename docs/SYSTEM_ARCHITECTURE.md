@@ -2,7 +2,7 @@
 
 **Purpose:** How the code is organised, how one web request flows through it, and where to find things.
 **Who it is for:** Beginners reading the code for the first time, and examiners asking "how does it work?".
-**Last verified:** 2026-11-22 against commit `dd2f32c`.
+**Last verified:** 2026-11-22 against commit `513e68f`.
 
 ## 1. The big picture
 
@@ -22,15 +22,16 @@ MediFind is one Django project (a "monolith": one program, one database), with s
 | `config/` | `settings.py` (all settings, read from environment variables), `urls.py` (top-level URL list) |
 | `accounts/` | Custom `User` model with a `role`, registration, login/logout, profile, notifications pages, role decorators (`decorators.py`), phone and pincode validators (`validators.py`) |
 | `medicines/` | `Medicine` catalogue, public search and detail pages, admin catalogue pages, the `seed_data` command (`medicines/management/commands/seed_data.py`) |
-| `pharmacies/` | `Pharmacy` model, directory and detail pages, profile edit, admin approval/users/requests pages, distance helpers |
+| `pharmacies/` | `Pharmacy` and `PharmacyApprovalLog` (approval history) models, directory and detail pages, profile edit, admin approval/users/requests pages, distance helpers |
 | `inventory/` | `Inventory` (stock of one medicine at one pharmacy), the owner's stock pages |
 | `requests_app/` | `AvailabilityRequest` and `Notification` models, request create/list/inbox/respond/cancel |
 | `dashboard/` | Home page and the three role dashboards (no models of its own) |
-| `templates/` | 35 HTML templates (+1 text template for the reset-email subject), one folder per app, `base.html` is the shared layout |
+| `templates/` | 37 HTML templates (+1 text template for the reset-email subject), one folder per app, `base.html` is the shared layout, `404.html` and `500.html` error pages |
 | `static/` | `static/css/styles.css`, `static/js/map_popup.js` (safe map popups), images, and `static/admin/js/admin/RelatedObjectLookups.js` (a patched copy of a Django admin file) |
 | `tests/` | Unit/integration tests run with Django's test runner |
 | `e2e/` | Browser tests with Playwright (see [TESTING_REPORT.md](TESTING_REPORT.md)) |
 | `render.yaml`, `build.sh`, `Procfile` | Deployment (see [PRODUCTION_DEPLOYMENT_GUIDE.md](PRODUCTION_DEPLOYMENT_GUIDE.md)) |
+| `.github/workflows/ci.yml`, `ruff.toml` | CI (lint, checks, tests on every push) and lint settings (see [TESTING_REPORT.md](TESTING_REPORT.md)) |
 
 Each app follows the same pattern:
 
@@ -43,7 +44,7 @@ Each app follows the same pattern:
 | `forms.py` | Input validation for HTML forms |
 | `admin.py` | How the model appears in Django admin (`/admin/`) |
 
-Not everything goes through services: the admin list pages (`pharmacies/views.py:138` and below) and the
+Not everything goes through services: the admin list pages (`pharmacies/views.py:140` and below) and the
 customer request list query the database in the view.
 
 ## 3. How one request travels (example: searching "Dolo")
@@ -74,10 +75,10 @@ success, with a flash message from `django.contrib.messages`.
 | Service file | Main functions |
 |---|---|
 | `accounts/services.py` | `register_customer`, `register_pharmacy` (user + pharmacy + notification in one transaction), `authenticate_user`, `mark_notification_as_read`, `mark_all_notifications_as_read` |
-| `medicines/services.py` | `search_medicine_inventory`, `get_search_filter_options`, `get_medicine_detail_data` |
-| `pharmacies/services.py` | `is_valid_coordinate`, `calculate_haversine_distance`, `bounding_box`, `haversine_expression`, `paginate`, `discover_nearby_pharmacies`, `get_pharmacy_for_user`, `set_pharmacy_approval`, `apply_pharmacy_profile_update`, `get_pharmacy_detail_data` |
+| `medicines/services.py` | `search_medicine_inventory`, `get_search_filter_options`, `get_medicine_detail_data` (with optional user location) |
+| `pharmacies/services.py` | `is_valid_coordinate`, `calculate_haversine_distance`, `bounding_box`, `haversine_expression`, `paginate`, `discover_nearby_pharmacies`, `get_pharmacy_for_user`, `set_pharmacy_approval` (writes the approval history), `apply_pharmacy_profile_update`, `get_pharmacy_detail_data` |
 | `inventory/services.py` | `get_inventory_counts`, `get_filtered_inventory`, `add_or_update_inventory` (sets, does not add to, the quantity), `delete_inventory_item` |
-| `requests_app/services.py` | `create_availability_inquiry`, `respond_to_availability_inquiry`, `cancel_availability_inquiry`, `get_pharmacy_inbox_counts` |
+| `requests_app/services.py` | `create_availability_inquiry`, `respond_to_availability_inquiry`, `cancel_availability_inquiry`, `cancel_pending_requests_for_medicine` (used when stock is deleted), `get_pharmacy_inbox_counts` |
 | `dashboard/services.py` | `get_home_page_metrics` and one `get_*_dashboard_metrics` per role |
 
 Counts on dashboards and inboxes use one `aggregate()` query with conditional `Count(..., filter=Q(...))`
@@ -87,14 +88,15 @@ instead of one query per status.
 
 - **Haversine formula:** the straight-line ("great circle") distance between two latitude/longitude
   points on a sphere of radius 6371 km. It is not road distance.
-- The Python version `calculate_haversine_distance()` (`pharmacies/services.py:35`) rounds to 2 decimals
+- The Python version `calculate_haversine_distance()` (`pharmacies/services.py:37`) rounds to 2 decimals
   and returns `None` for missing or invalid coordinates.
 - For filtering and sorting, the same formula is built as a **database expression**
-  (`haversine_expression()`, `pharmacies/services.py:91`), so radius filter, ordering and pagination run
+  (`haversine_expression()`, `pharmacies/services.py:93`), so radius filter, ordering and pagination run
   in the database. A cheap latitude/longitude box (`bounding_box()`) is applied first.
 - The user's location comes from the browser (the HTML5 Geolocation API) only after the user allows it.
   It is sent as `lat`/`lng` in the URL and also appears in the page (in `json_script`) to draw the
   user's pin. It is not stored in the database.
+- Distances appear on the medicine search, the pharmacy directory and the medicine detail page.
 - Pharmacies without coordinates have no pin and no distance. On the search page at most 100 pins are
   drawn, one per pharmacy, for the current page.
 
@@ -117,11 +119,13 @@ instead of one query per status.
 | How "In Stock / Low / Out" is decided | `Inventory.save()` in `inventory/models.py:52` |
 | The freshness rule (24h / 48h) | `inventory/models.py:66-99` |
 | The search order | `STOCK_RANK` in `medicines/services.py:22` |
-| Approve / revoke | `set_pharmacy_approval()` in `pharmacies/services.py:286` |
-| Re-approval after a profile edit | `apply_pharmacy_profile_update()` in `pharmacies/services.py:333` |
+| Approve / revoke and the approval history | `set_pharmacy_approval()` in `pharmacies/services.py:288`, model `PharmacyApprovalLog` in `pharmacies/models.py:134` |
+| Re-approval after a profile edit | `apply_pharmacy_profile_update()` in `pharmacies/services.py:344` |
 | Request rules (duplicate, rate limit) | `create_availability_inquiry()` in `requests_app/services.py:23` |
 | "Answered once" | `respond_to_availability_inquiry()` in `requests_app/services.py:108` |
 | Login rate limit | `login_view()` and helpers in `accounts/views.py:78-152` |
 | All settings and their defaults | `config/settings.py` and [ENVIRONMENT_VARIABLES_GUIDE.md](ENVIRONMENT_VARIABLES_GUIDE.md) |
 | Demo data | `medicines/management/commands/seed_data.py` |
 | Safe map popups | `static/js/map_popup.js` |
+| Cancelling requests when stock is deleted | `inventory_delete_view()` in `inventory/views.py:150` |
+| Error pages | `templates/404.html`, `templates/500.html` (used when DEBUG is False) |

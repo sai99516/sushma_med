@@ -2,7 +2,7 @@
 
 **Purpose:** The tables (models), their fields, relations, constraints and indexes, and how to rebuild the local database.
 **Who it is for:** Developers changing models or queries, and examiners asking about the data design.
-**Last verified:** 2026-11-22 against commit `dd2f32c` (6 models, 17 migrations, 15 named indexes).
+**Last verified:** 2026-11-22 against commit `513e68f` (7 models, 18 migrations, 15 named indexes).
 
 Django "models" are Python classes; each one is a database table. Django's ORM (object-relational mapper)
 turns Python queries into SQL, so the code has no raw SQL. Locally the database is the SQLite file
@@ -20,6 +20,8 @@ erDiagram
     MEDICINE ||--o{ INVENTORY : "is listed in"
     PHARMACY ||--o{ AVAILABILITY_REQUEST : "receives"
     MEDICINE ||--o{ AVAILABILITY_REQUEST : "is asked about"
+    PHARMACY ||--o{ PHARMACY_APPROVAL_LOG : "has history"
+    USER ||--o{ PHARMACY_APPROVAL_LOG : "made the change"
 ```
 
 ## 2. Models
@@ -52,6 +54,18 @@ Extends Django's `AbstractUser` (username, password hash, first/last name, `is_s
 | `created_at` | set on create |
 
 Public pages filter on `is_approved=True`; admin pages filter on `approval_status`.
+
+### PharmacyApprovalLog (`pharmacies/models.py`)
+One row per approval status change: approve, revoke, and "back to Pending" after an owner edits a
+sensitive field.
+
+| Field | Type and rules |
+|---|---|
+| `pharmacy` | FK to Pharmacy, CASCADE, `related_name='approval_logs'` |
+| `from_status`, `to_status` | `PENDING` / `APPROVED` / `REVOKED` |
+| `changed_by` | FK to User, SET_NULL (the history stays if the user is deleted) |
+| `reason` | up to 500 characters, optional (admin's reason, or "Owner changed address, …") |
+| `created_at` | indexed; newest first |
 
 ### Medicine (`medicines/models.py`)
 
@@ -129,7 +143,8 @@ Single columns marked "indexed" above have their own index as well (`db_index=Tr
 
 - Registration of a pharmacy (user + pharmacy + notification) and of a customer (user + notification)
   runs in one transaction (`transaction.atomic()`), so a failure saves nothing.
-- Approve/revoke locks the pharmacy row (`select_for_update()`).
+- Approve/revoke locks the pharmacy row (`select_for_update()`) and writes the history row in the same transaction.
+- Deleting a stock row and cancelling its pending requests happen in one transaction.
 - Answering or cancelling a request uses a conditional `UPDATE … WHERE status='PENDING'`, so only the
   first change wins.
 - Creating a request locks the customer row so two quick submits cannot both pass the duplicate and
@@ -137,10 +152,11 @@ Single columns marked "indexed" above have their own index as well (`db_index=Tr
 
 ## 5. Migrations (17)
 
-`accounts` 0001–0003, `inventory` 0001–0003, `medicines` 0001–0003, `pharmacies` 0001–0005,
+`accounts` 0001–0003, `inventory` 0001–0003, `medicines` 0001–0003, `pharmacies` 0001–0006,
 `requests_app` 0001–0003. Notable ones: `pharmacies.0003_pharmacy_approval_status` (adds the status and
 fills it from `is_approved`), `pharmacies.0004_…` (owner becomes one-to-one, coordinate validators),
-`pharmacies.0005_pharmacy_pincode_validator`, `medicines.0003_medicine_is_active_and_more` (archive flag
+`pharmacies.0005_pharmacy_pincode_validator`, `pharmacies.0006_pharmacyapprovallog` (approval history),
+`medicines.0003_medicine_is_active_and_more` (archive flag
 and unique constraint), `requests_app.0003_availabilityrequest_protect_fks`.
 
 Apply them with `python manage.py migrate` (`build.sh` does this on deploy). Check that models and
