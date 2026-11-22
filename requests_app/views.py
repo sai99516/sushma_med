@@ -36,18 +36,22 @@ def create_request_view(request, pharmacy_id, medicine_id):
     if request.method == 'POST':
         form = AvailabilityRequestCreateForm(request.POST)
         if form.is_valid():
-            req = create_availability_inquiry(
-                customer=request.user,
-                pharmacy=pharmacy,
-                medicine=medicine,
-                quantity_requested=form.cleaned_data['quantity_requested'],
-                request_message=form.cleaned_data.get('request_message', '')
-            )
-            messages.success(
-                request,
-                f"Your request for '{medicine.medicine_name}' has been sent to {pharmacy.pharmacy_name}. You can track responses in your dashboard."
-            )
-            return redirect('customer_requests')
+            try:
+                create_availability_inquiry(
+                    customer=request.user,
+                    pharmacy=pharmacy,
+                    medicine=medicine,
+                    quantity_requested=form.cleaned_data['quantity_requested'],
+                    request_message=form.cleaned_data.get('request_message', '')
+                )
+            except ValidationError as e:
+                messages.error(request, " ".join(e.messages))
+            else:
+                messages.success(
+                    request,
+                    f"Your request for '{medicine.medicine_name}' has been sent to {pharmacy.pharmacy_name}. You can track responses in your dashboard."
+                )
+                return redirect('customer_requests')
     else:
         form = AvailabilityRequestCreateForm()
 
@@ -164,8 +168,17 @@ def respond_request_view(request, pk):
         pharmacy=pharmacy
     )
 
+    if pharmacy.approval_status == Pharmacy.STATUS_REVOKED:
+        messages.error(request, "Your pharmacy's approval has been revoked, so it cannot answer requests.")
+        return redirect('pharmacy_inbox')
+
     if req_obj.status == 'CANCELLED':
         messages.warning(request, f"Request #{req_obj.id} was cancelled by the customer and cannot be modified.")
+        return redirect('pharmacy_inbox')
+
+    # Review N3: a request can be answered only once.
+    if req_obj.status != 'PENDING':
+        messages.info(request, f"Request #{req_obj.id} has already been answered ({req_obj.get_status_display()}).")
         return redirect('pharmacy_inbox')
 
     if request.method == 'POST':

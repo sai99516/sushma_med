@@ -194,7 +194,7 @@ class EndToEndWorkflowTests(TestCase):
             username='admin_e2e', email='admin_e2e@test.com', password='AdminPass123!', role='ADMIN'
         )
         self.client.login(username='admin_e2e', password='AdminPass123!')
-        appr_resp = self.client.post(reverse('toggle_pharmacy_approval', args=[pharmacy.id]), follow=True)
+        appr_resp = self.client.post(reverse('toggle_pharmacy_approval', args=[pharmacy.id]), {'action': 'approve'}, follow=True)
         self.assertEqual(appr_resp.status_code, 200)
         pharmacy.refresh_from_db()
         self.assertTrue(pharmacy.is_approved)

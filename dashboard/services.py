@@ -150,8 +150,9 @@ def get_admin_dashboard_metrics() -> Dict[str, Any]:
     # 2. Grouped Pharmacy verification counts (1 query)
     pharmacy_counts = Pharmacy.objects.aggregate(
         total=Count('id'),
-        pending=Count('id', filter=Q(is_approved=False)),
-        approved=Count('id', filter=Q(is_approved=True)),
+        pending=Count('id', filter=Q(approval_status=Pharmacy.STATUS_PENDING)),
+        approved=Count('id', filter=Q(approval_status=Pharmacy.STATUS_APPROVED)),
+        revoked=Count('id', filter=Q(approval_status=Pharmacy.STATUS_REVOKED)),
     )
 
     # 3. Grouped request status counts (1 query)
@@ -167,7 +168,7 @@ def get_admin_dashboard_metrics() -> Dict[str, Any]:
     total_inventory = Inventory.objects.count()
 
     pending_pharmacies_list = Pharmacy.objects.filter(
-        is_approved=False
+        approval_status=Pharmacy.STATUS_PENDING
     ).select_related('owner').order_by('-created_at')[:5]
 
     recent_requests = AvailabilityRequest.objects.select_related(
@@ -191,6 +192,7 @@ def get_admin_dashboard_metrics() -> Dict[str, Any]:
         'total_pharmacies': pharmacy_counts['total'] or 0,
         'pending_approvals': pharmacy_counts['pending'] or 0,
         'approved_pharmacies': pharmacy_counts['approved'] or 0,
+        'revoked_pharmacies': pharmacy_counts['revoked'] or 0,
         'total_medicines': total_medicines,
         'total_inventory': total_inventory,
         'total_requests': request_counts['total'] or 0,

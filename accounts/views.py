@@ -8,7 +8,7 @@ from django.core.paginator import EmptyPage, PageNotAnInteger, Paginator
 from django.shortcuts import redirect, render
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.http import require_POST
-from pharmacies.services import get_pharmacy_for_user
+from pharmacies.services import apply_pharmacy_profile_update, get_pharmacy_for_user
 from requests_app.models import Notification
 from .forms import CustomerRegistrationForm, PharmacyProfileForm, PharmacyRegistrationForm, UserProfileForm
 from .services import (
@@ -152,9 +152,16 @@ def profile_view(request):
             pharmacy_form = PharmacyProfileForm(request.POST, instance=pharmacy)
             user_form = UserProfileForm(instance=request.user)
             if pharmacy_form.is_valid():
-                pharmacy_form.save()
+                pharmacy, needs_reapproval = apply_pharmacy_profile_update(pharmacy_form, request.user)
                 logger.info("Pharmacy profile updated for '%s' by user: %s", pharmacy.pharmacy_name, request.user.username)
-                messages.success(request, "Pharmacy store details updated successfully.")
+                if needs_reapproval:
+                    messages.warning(
+                        request,
+                        "Pharmacy store details updated. Because you changed the name, address or location, "
+                        "your pharmacy is hidden from search until an administrator approves it again."
+                    )
+                else:
+                    messages.success(request, "Pharmacy store details updated successfully.")
                 return redirect('profile')
             else:
                 messages.error(request, "Please correct the errors in the pharmacy details form.")

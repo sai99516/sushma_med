@@ -22,22 +22,24 @@ def register_customer(cleaned_data: Dict[str, Any]) -> User:
     first_name = cleaned_data.get('first_name', '')
     last_name = cleaned_data.get('last_name', '')
 
-    user = User(
-        username=username,
-        email=email,
-        phone_number=phone_number,
-        first_name=first_name,
-        last_name=last_name,
-        role='CUSTOMER',
-    )
-    user.set_password(password)
-    user.save()
+    # Review N24: user + welcome notification are saved together or not at all.
+    with transaction.atomic():
+        user = User(
+            username=username,
+            email=email,
+            phone_number=phone_number,
+            first_name=first_name,
+            last_name=last_name,
+            role='CUSTOMER',
+        )
+        user.set_password(password)
+        user.save()
 
-    # Welcome notification
-    Notification.objects.create(
-        user=user,
-        message="Welcome to MediFind! Search medicines across your city and request real-time stock updates."
-    )
+        # Welcome notification (review N40: no "real-time" promise)
+        Notification.objects.create(
+            user=user,
+            message="Welcome to MediFind! Search medicines across your city. Stock is pharmacy-reported, so check the \"updated\" time and send a request to confirm."
+        )
 
     logger.info("New customer account registered: username=%s (id=%s)", username, user.pk)
     return user
@@ -70,9 +72,9 @@ def register_pharmacy(cleaned_data: Dict[str, Any]) -> Pharmacy:
             state=cleaned_data.get('state', ''),
             pincode=cleaned_data['pincode'],
             phone_number=cleaned_data.get('phone_number', ''),
-            latitude=cleaned_data.get('latitude') or None,
-            longitude=cleaned_data.get('longitude') or None,
-            is_approved=False
+            latitude=cleaned_data.get('latitude'),
+            longitude=cleaned_data.get('longitude'),
+            approval_status=Pharmacy.STATUS_PENDING
         )
 
         # 3. Create initial notification

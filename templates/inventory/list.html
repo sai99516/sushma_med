@@ -6,7 +6,17 @@
 <div class="row g-4">
 
   <!-- Unapproved warning banner if applicable -->
-  {% if not pharmacy.is_approved %}
+  {% if pharmacy.approval_status == 'REVOKED' %}
+    <div class="col-12">
+      <div class="alert alert-danger d-flex align-items-center justify-content-between p-3 shadow-sm" role="alert">
+        <div>
+          <i class="bi bi-slash-circle fs-4 me-2 align-middle"></i>
+          <strong>Approval Revoked:</strong> Your pharmacy is hidden from public search. You cannot update stock or answer requests. Please contact the platform administrator.
+        </div>
+        <span class="badge bg-danger rounded-pill px-3 py-2">Revoked</span>
+      </div>
+    </div>
+  {% elif not pharmacy.is_approved %}
     <div class="col-12">
       <div class="alert alert-warning d-flex align-items-center justify-content-between p-3 border-warning shadow-sm" role="alert">
         <div>

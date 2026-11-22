@@ -327,8 +327,9 @@ class DatabaseOptimizationAndPerformanceTests(TestCase):
                 pharmacy_response='Ready for pickup'
             )
 
-        # Look up request + update + notification insert = 3 queries (no extra lookups for customer/medicine)
-        self.assertLessEqual(len(ctx.captured_queries), 4)
+        # Look up request + conditional update + notification insert, plus SAVEPOINT/RELEASE
+        # from transaction.atomic() (review N4/N24); no extra lookups for customer/medicine.
+        self.assertLessEqual(len(ctx.captured_queries), 6)
 
     # ------------------------------------------------------------------ #
     # 10. Inventory delete uses select_related('medicine')               #

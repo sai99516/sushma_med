@@ -328,6 +328,7 @@ class AdminPortalAndGovernanceTests(TestCase):
         self.client.login(username='admin_p7', password='AdminPass123!')
         response = self.client.post(
             reverse('toggle_pharmacy_approval', args=[pharm.pk]),
+            {'action': 'approve'},
             follow=True
         )
         self.assertIn(response.status_code, [200, 302])
@@ -361,6 +362,7 @@ class AdminPortalAndGovernanceTests(TestCase):
         self.client.login(username='admin_p7', password='AdminPass123!')
         response = self.client.post(
             reverse('toggle_pharmacy_approval', args=[pharm.pk]),
+            {'action': 'revoke'},
             follow=True
         )
         self.assertIn(response.status_code, [200, 302])

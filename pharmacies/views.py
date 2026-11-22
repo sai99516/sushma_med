@@ -14,7 +14,8 @@ from .services import (
     get_pharmacy_detail_data,
     get_pharmacy_filter_options,
     get_pharmacy_for_user,
-    toggle_pharmacy_approval,
+    apply_pharmacy_profile_update,
+    set_pharmacy_approval,
 )
 
 logger = logging.getLogger('medfind')
@@ -102,9 +103,16 @@ def edit_pharmacy_profile_view(request):
     if request.method == 'POST':
         form = PharmacyEditForm(request.POST, instance=pharmacy)
         if form.is_valid():
-            form.save()
+            pharmacy, needs_reapproval = apply_pharmacy_profile_update(form, request.user)
             logger.info("Pharmacy profile updated: '%s' by owner: %s", pharmacy.pharmacy_name, request.user.username)
-            messages.success(request, "Pharmacy profile updated successfully.")
+            if needs_reapproval:
+                messages.warning(
+                    request,
+                    "Pharmacy profile updated. Because you changed the name, address or location, "
+                    "your pharmacy is hidden from search until an administrator approves it again."
+                )
+            else:
+                messages.success(request, "Pharmacy profile updated successfully.")
             return redirect('pharmacy_dashboard')
     else:
         form = PharmacyEditForm(instance=pharmacy)
@@ -124,9 +132,11 @@ def admin_pharmacy_list_view(request):
     pharmacies = Pharmacy.objects.select_related('owner').order_by('-created_at')
 
     if status_filter == 'pending':
-        pharmacies = pharmacies.filter(is_approved=False)
+        pharmacies = pharmacies.filter(approval_status=Pharmacy.STATUS_PENDING)
     elif status_filter == 'approved':
-        pharmacies = pharmacies.filter(is_approved=True)
+        pharmacies = pharmacies.filter(approval_status=Pharmacy.STATUS_APPROVED)
+    elif status_filter == 'revoked':
+        pharmacies = pharmacies.filter(approval_status=Pharmacy.STATUS_REVOKED)
 
     if search_q:
         pharmacies = pharmacies.filter(
@@ -163,9 +173,23 @@ def admin_pharmacy_list_view(request):
 @admin_required
 @require_POST
 def toggle_pharmacy_approval_view(request, pk):
-    """Toggles pharmacy verification state via POST."""
-    pharmacy, is_approved, status_str = toggle_pharmacy_approval(pk, request.user)
-    messages.success(request, f"Pharmacy '{pharmacy.pharmacy_name}' status changed to: {status_str}.")
+    """
+    Sets pharmacy approval via POST (review N5). The form must send
+    action=approve or action=revoke; the URL name is kept for compatibility
+    but it no longer toggles.
+    """
+    action = request.POST.get('action', '').strip().lower()
+    if action not in ('approve', 'revoke'):
+        messages.error(request, "Invalid approval action.")
+        return redirect('admin_pharmacy_list')
+    pharmacy, changed, msg = set_pharmacy_approval(pk, action == 'approve', request.user)
+    if changed:
+        messages.success(request, msg)
+    else:
+        messages.info(request, msg)
+    next_url = request.POST.get('next', '')
+    if next_url == 'admin_dashboard':
+        return redirect('admin_dashboard')
     return redirect('admin_pharmacy_list')
 
 

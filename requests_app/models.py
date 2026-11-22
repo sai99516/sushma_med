@@ -17,14 +17,16 @@ class AvailabilityRequest(models.Model):
         on_delete=models.CASCADE,
         related_name='customer_requests'
     )
+    # Review N29: PROTECT so deleting a pharmacy or medicine in /admin/ cannot
+    # silently delete customers' request history.
     pharmacy = models.ForeignKey(
         Pharmacy,
-        on_delete=models.CASCADE,
+        on_delete=models.PROTECT,
         related_name='pharmacy_requests'
     )
     medicine = models.ForeignKey(
         Medicine,
-        on_delete=models.CASCADE,
+        on_delete=models.PROTECT,
         related_name='availability_requests'
     )
     quantity_requested = models.PositiveIntegerField(

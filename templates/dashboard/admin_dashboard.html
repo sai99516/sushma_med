@@ -58,6 +58,7 @@
     <div class="stat-tile flex-column text-center p-3">
       <div class="stat-value fs-3" style="color: var(--med-warning);">{{ pending_approvals }}</div>
       <div class="stat-label small">Pending Verification</div>
+      <div class="small text-muted">{{ revoked_pharmacies }} revoked</div>
     </div>
   </div>
   <div class="col-md-3 col-xl">
@@ -120,6 +121,8 @@
                   <td class="text-end">
                     <form method="POST" action="{% url 'toggle_pharmacy_approval' p.id %}" class="d-inline">
                       {% csrf_token %}
+                      <input type="hidden" name="action" value="approve">
+                      <input type="hidden" name="next" value="admin_dashboard">
                       <button type="submit" class="btn btn-sm btn-success py-1 px-3" style="font-size: 0.8rem;">
                         Approve
                       </button>

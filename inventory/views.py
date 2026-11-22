@@ -17,6 +17,14 @@ from .services import (
 logger = logging.getLogger('medfind')
 
 
+def _revoked_redirect(request, pharmacy):
+    """Review N19: a revoked pharmacy cannot change its stock."""
+    if pharmacy is not None and pharmacy.is_revoked:
+        messages.error(request, "Your pharmacy's approval has been revoked, so stock cannot be changed.")
+        return redirect('inventory_list')
+    return None
+
+
 @pharmacy_required
 def inventory_list_view(request):
     """Displays pharmacy inventory with search, status filtering, sorting, pagination, and stock counts."""
@@ -68,6 +76,9 @@ def inventory_add_view(request):
     if not pharmacy:
         messages.error(request, "You must have a registered pharmacy to manage inventory.")
         return redirect('dashboard')
+    blocked = _revoked_redirect(request, pharmacy)
+    if blocked:
+        return blocked
 
     if request.method == 'POST':
         form = InventoryAddForm(request.POST)
@@ -101,6 +112,9 @@ def inventory_add_view(request):
 def inventory_edit_view(request, pk):
     """Allows pharmacy owners to modify stock quantities for owned items."""
     pharmacy = get_pharmacy_for_user(request.user)
+    blocked = _revoked_redirect(request, pharmacy)
+    if blocked:
+        return blocked
     # Enforce multi-tenant isolation: cannot edit inventory of other pharmacies!
     inventory_item = get_object_or_404(
         Inventory.objects.select_related('medicine'),
@@ -135,6 +149,9 @@ def inventory_edit_view(request, pk):
 def inventory_delete_view(request, pk):
     """Prompts and executes inventory item deletion with ownership verification."""
     pharmacy = get_pharmacy_for_user(request.user)
+    blocked = _revoked_redirect(request, pharmacy)
+    if blocked:
+        return blocked
     inventory_item = get_object_or_404(
         Inventory.objects.select_related('medicine'),
         pk=pk,

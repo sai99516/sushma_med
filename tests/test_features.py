@@ -245,7 +245,7 @@ class MediFindCompleteTestSuite(TestCase):
     def test_admin_pharmacy_approval(self):
         self.client.force_login(self.admin)
         self.assertFalse(self.unapproved_pharmacy.is_approved)
-        resp = self.client.post(reverse('toggle_pharmacy_approval', args=[self.unapproved_pharmacy.id]))
+        resp = self.client.post(reverse('toggle_pharmacy_approval', args=[self.unapproved_pharmacy.id]), {'action': 'approve'})
         self.assertEqual(resp.status_code, 302)
         self.unapproved_pharmacy.refresh_from_db()
         self.assertTrue(self.unapproved_pharmacy.is_approved)

@@ -2,8 +2,10 @@ import logging
 import math
 from typing import Any, Dict, List, Optional, Tuple
 from django.core.paginator import EmptyPage, Page, PageNotAnInteger, Paginator
+from django.db import transaction
 from django.db.models import Q, QuerySet
 from django.shortcuts import get_object_or_404
+from django.utils import timezone
 from requests_app.models import Notification
 from .models import Pharmacy
 
@@ -208,28 +210,107 @@ def get_pharmacy_for_user(user) -> Optional[Pharmacy]:
     return Pharmacy.objects.filter(owner=user).first()
 
 
-def toggle_pharmacy_approval(pharmacy_id: int, admin_user) -> Tuple[Pharmacy, bool, str]:
-    """
-    Toggles the approval status of a pharmacy facility and dispatches an audit notification.
-    Uses select_related('owner') to avoid an N+1 query when dispatching owner notification.
-    """
-    pharmacy = get_object_or_404(Pharmacy.objects.select_related('owner'), pk=pharmacy_id)
-    pharmacy.is_approved = not pharmacy.is_approved
-    pharmacy.save(update_fields=['is_approved'])
-
-    status_str = "Approved" if pharmacy.is_approved else "Revoked Approval"
-
-    # Notify pharmacy owner
-    Notification.objects.create(
-        user=pharmacy.owner,
-        message=f"Your pharmacy '{pharmacy.pharmacy_name}' has been {status_str.lower()} by the MediFind Administrator."
+def _cancel_pending_requests_for_revoked(pharmacy: Pharmacy) -> int:
+    """Review N19: on revoke, cancel the pharmacy's PENDING requests and tell each customer."""
+    from requests_app.models import AvailabilityRequest
+    pending = list(
+        AvailabilityRequest.objects.select_for_update()
+        .filter(pharmacy=pharmacy, status='PENDING')
+        .select_related('customer', 'medicine')
     )
-
-    logger.info(
-        "Pharmacy approval status updated: '%s' (id=%d) -> %s by admin '%s'",
-        pharmacy.pharmacy_name, pharmacy.id, status_str, admin_user.username
+    if not pending:
+        return 0
+    AvailabilityRequest.objects.filter(pk__in=[r.pk for r in pending], status='PENDING').update(
+        status='CANCELLED',
+        pharmacy_response='Automatically cancelled: this pharmacy is no longer approved on MediFind.',
+        updated_at=timezone.now(),
     )
-    return pharmacy, pharmacy.is_approved, status_str
+    Notification.objects.bulk_create([
+        Notification(
+            user=r.customer,
+            message=(
+                f"Your request for '{r.medicine.medicine_name}' at {pharmacy.pharmacy_name} was cancelled "
+                f"because the pharmacy is no longer approved on MediFind."
+            ),
+        )
+        for r in pending
+    ])
+    return len(pending)
+
+
+def set_pharmacy_approval(pharmacy_id: int, approve: bool, admin_user) -> Tuple[Pharmacy, bool, str]:
+    """
+    Review N5/N24: explicitly sets approval (approve=True) or revokes it (approve=False).
+    Idempotent: if the pharmacy is already in the wanted state nothing changes and
+    no notification is sent. Runs in a transaction with a row lock.
+    Returns (pharmacy, changed, message).
+    """
+    with transaction.atomic():
+        pharmacy = get_object_or_404(
+            Pharmacy.objects.select_for_update().select_related('owner'), pk=pharmacy_id
+        )
+        target = Pharmacy.STATUS_APPROVED if approve else Pharmacy.STATUS_REVOKED
+
+        if pharmacy.approval_status == target:
+            state = "approved" if approve else "revoked"
+            return pharmacy, False, f"Pharmacy '{pharmacy.pharmacy_name}' is already {state}. No change made."
+
+        # Note: revoking a PENDING application also records it as REVOKED (rejected).
+        pharmacy.approval_status = target
+        pharmacy.save(update_fields=['approval_status'])
+
+        cancelled = 0
+        if approve:
+            owner_msg = (
+                f"Your pharmacy '{pharmacy.pharmacy_name}' has been approved by the MediFind administrator. "
+                f"It is now visible in public search."
+            )
+            result_msg = f"Pharmacy '{pharmacy.pharmacy_name}' has been approved."
+        else:
+            cancelled = _cancel_pending_requests_for_revoked(pharmacy)
+            owner_msg = (
+                f"The approval of your pharmacy '{pharmacy.pharmacy_name}' has been revoked by the MediFind "
+                f"administrator. It is hidden from public search and cannot update stock or answer requests."
+            )
+            result_msg = f"Approval for pharmacy '{pharmacy.pharmacy_name}' has been revoked."
+            if cancelled:
+                result_msg += f" {cancelled} pending request(s) were cancelled and the customers notified."
+
+        Notification.objects.create(user=pharmacy.owner, message=owner_msg)
+
+        logger.info(
+            "Pharmacy approval set: '%s' (id=%d) -> %s by admin '%s' (cancelled_requests=%d)",
+            pharmacy.pharmacy_name, pharmacy.id, target, getattr(admin_user, 'username', '?'), cancelled
+        )
+        return pharmacy, True, result_msg
+
+
+def apply_pharmacy_profile_update(form, user) -> Tuple[Pharmacy, bool]:
+    """
+    Review known #5: saves a pharmacy profile form. If the pharmacy is APPROVED and a
+    sensitive field (name, address, city, pincode, lat/lng) changed, it goes back to
+    PENDING and needs a new admin approval. Returns (pharmacy, needs_reapproval).
+    """
+    with transaction.atomic():
+        pharmacy = form.save(commit=False)
+        sensitive_changed = [f for f in form.changed_data if f in Pharmacy.SENSITIVE_FIELDS]
+        needs_reapproval = bool(sensitive_changed) and pharmacy.approval_status == Pharmacy.STATUS_APPROVED
+        if needs_reapproval:
+            pharmacy.approval_status = Pharmacy.STATUS_PENDING
+        pharmacy.save()
+        if needs_reapproval:
+            Notification.objects.create(
+                user=pharmacy.owner,
+                message=(
+                    f"You changed {', '.join(sensitive_changed)} of '{pharmacy.pharmacy_name}'. "
+                    f"The pharmacy is hidden from public search until an administrator approves it again."
+                ),
+            )
+            logger.info(
+                "Pharmacy id=%d sent back to PENDING after sensitive edit (%s) by '%s'",
+                pharmacy.id, ', '.join(sensitive_changed), user.username
+            )
+    return pharmacy, needs_reapproval
 
 
 def get_pharmacy_detail_data(pharmacy_id: int, user) -> Tuple[Optional[Pharmacy], Optional[QuerySet], Optional[Dict[str, Any]], bool]:

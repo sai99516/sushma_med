@@ -90,6 +90,10 @@
                 <span class="badge bg-success-subtle text-success-emphasis border border-success-subtle">
                   <i class="bi bi-shield-check me-1"></i> Approved &amp; Publicly Visible
                 </span>
+              {% elif pharmacy.approval_status == 'REVOKED' %}
+                <span class="badge bg-danger-subtle text-danger-emphasis border border-danger-subtle">
+                  <i class="bi bi-slash-circle me-1"></i> Approval Revoked
+                </span>
               {% else %}
                 <span class="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle">
                   <i class="bi bi-clock-history me-1"></i> Pending Administrative Review
@@ -107,7 +111,7 @@
               <div class="col-sm-6">
                 <span class="text-muted d-block">Verification Status:</span>
                 <strong class="{% if pharmacy.is_approved %}text-success{% else %}text-warning{% endif %}">
-                  {% if pharmacy.is_approved %}Active Partner Pharmacy{% else %}Under Review by Platform Admin{% endif %}
+                  {% if pharmacy.is_approved %}Active Partner Pharmacy{% elif pharmacy.approval_status == 'REVOKED' %}Approval Revoked{% else %}Under Review by Platform Admin{% endif %}
                 </strong>
               </div>
             </div>

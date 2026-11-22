@@ -271,6 +271,8 @@ class PharmacyDashboardAndInventoryTests(TestCase):
 
     def test_customer_request_management(self):
         """Vector 10: Pharmacy can view incoming requests in inbox and respond."""
+        # Requests now require the pharmacy to list the medicine (review N9).
+        Inventory.objects.create(pharmacy=self.pharmacy_a, medicine=self.med_paracetamol, quantity=20)
         req = create_availability_inquiry(
             customer=self.customer,
             pharmacy=self.pharmacy_a,
@@ -297,6 +299,8 @@ class PharmacyDashboardAndInventoryTests(TestCase):
 
     def test_invalid_request_transitions(self):
         """Vector 11: Responding to CANCELLED request blocked; invalid transition statuses rejected."""
+        # Requests now require the pharmacy to list the medicine (review N9).
+        Inventory.objects.create(pharmacy=self.pharmacy_a, medicine=self.med_paracetamol, quantity=20)
         req = create_availability_inquiry(
             customer=self.customer,
             pharmacy=self.pharmacy_a,
