@@ -99,18 +99,12 @@ class AdminPortalAndGovernanceTests(TestCase):
         )
 
         # Inventory item (approved pharmacy)
-        try:
-            cls.inventory = Inventory.objects.create(
-                pharmacy=cls.pharmacy_approved,
-                medicine=cls.medicine,
-                quantity=50,
-                price=10.00,
-                availability_status='IN_STOCK',
-            )
-        except Exception:
-            cls.inventory = Inventory.objects.filter(
-                pharmacy=cls.pharmacy_approved, medicine=cls.medicine
-            ).first()
+        cls.inventory = Inventory.objects.create(
+            pharmacy=cls.pharmacy_approved,
+            medicine=cls.medicine,
+            quantity=50,
+            availability_status='IN_STOCK',
+        )
 
         # Requests
         cls.req_pending = AvailabilityRequest.objects.create(
@@ -481,3 +475,17 @@ class AdminPortalAndGovernanceTests(TestCase):
                     req.status, status_val,
                     f'Status filter {status_val} returned request with status {req.status}'
                 )
+
+    # ------------------------------------------------------------------ #
+    # 16. Shared inventory fixture is really created (review N30)          #
+    # ------------------------------------------------------------------ #
+    def test_16_inventory_fixture_created(self):
+        """The class fixture must create one real inventory row for the approved pharmacy."""
+        self.assertIsNotNone(self.inventory, 'Inventory fixture was not created')
+        self.assertEqual(self.inventory.pharmacy, self.pharmacy_approved)
+        self.assertEqual(self.inventory.quantity, 50)
+        self.assertEqual(self.inventory.availability_status, 'IN_STOCK')
+
+        self.client.login(username='admin_p7', password='AdminPass123!')
+        response = self.client.get(reverse('admin_dashboard'))
+        self.assertEqual(response.context['total_inventory'], 1)
