@@ -170,3 +170,34 @@ class ApprovalHistoryTests(TestCase):
         self.assertContains(self.client.get(url), 'Approval history')           # admin
         self.client.force_login(self.pharmacy.owner)
         self.assertContains(self.client.get(url), 'Approval history')           # owner
+
+
+class DeleteStockCancelsRequestsTests(TestCase):
+    """F6: deleting a stock row cancels that medicine's PENDING requests at that pharmacy."""
+
+    def test_pending_requests_cancelled_and_customer_notified(self):
+        from accounts.models import User
+        from django.urls import reverse
+        from inventory.models import Inventory
+        from medicines.models import Medicine
+        from requests_app.models import AvailabilityRequest, Notification
+        med = Medicine.objects.create(medicine_name='Dolo 650', generic_name='Paracetamol', strength='650mg')
+        other_med = Medicine.objects.create(medicine_name='Pan 40', generic_name='Pantoprazole', strength='40mg')
+        pharmacy = _pharmacy('del', 'Delete Pharmacy', 17.4, 78.4)
+        item = Inventory.objects.create(pharmacy=pharmacy, medicine=med, quantity=5)
+        Inventory.objects.create(pharmacy=pharmacy, medicine=other_med, quantity=5)
+        cust = User.objects.create_user(username='c1', email='c1@t.test', password='x')
+        pending = AvailabilityRequest.objects.create(customer=cust, pharmacy=pharmacy, medicine=med)
+        answered = AvailabilityRequest.objects.create(customer=cust, pharmacy=pharmacy, medicine=med, status='CONFIRMED')
+        other = AvailabilityRequest.objects.create(customer=cust, pharmacy=pharmacy, medicine=other_med)
+
+        self.client.force_login(pharmacy.owner)
+        resp = self.client.post(reverse('inventory_delete', args=[item.pk]), follow=True)
+        self.assertContains(resp, '1 pending request')
+        for r in (pending, answered, other):
+            r.refresh_from_db()
+        self.assertEqual(pending.status, 'CANCELLED')
+        self.assertIn('no longer lists', pending.pharmacy_response)
+        self.assertEqual(answered.status, 'CONFIRMED')
+        self.assertEqual(other.status, 'PENDING')
+        self.assertTrue(Notification.objects.filter(user=cust, message__contains='no longer lists').exists())

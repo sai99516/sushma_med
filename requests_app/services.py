@@ -171,3 +171,35 @@ def cancel_availability_inquiry(request_id: int, customer) -> Tuple[bool, str]:
         logger.info("Availability request #%d cancelled by customer: %s", req_obj.id, customer.username)
         return True, f"Request #{req_obj.id} has been cancelled."
     return False, "Only pending requests can be cancelled."
+
+
+def cancel_pending_requests_for_medicine(pharmacy: Pharmacy, medicine: Medicine) -> int:
+    """
+    F6: when a pharmacy removes a medicine from its stock, its PENDING requests for that
+    medicine are cancelled (conditional update) and each customer is notified.
+    Returns the number of cancelled requests.
+    """
+    pending = list(
+        AvailabilityRequest.objects.filter(pharmacy=pharmacy, medicine=medicine, status='PENDING')
+        .select_related('customer')
+    )
+    if not pending:
+        return 0
+    AvailabilityRequest.objects.filter(pk__in=[r.pk for r in pending], status='PENDING').update(
+        status='CANCELLED',
+        pharmacy_response='Automatically cancelled: the pharmacy no longer lists this medicine.',
+        updated_at=timezone.now(),
+    )
+    Notification.objects.bulk_create([
+        Notification(
+            user=r.customer,
+            message=(
+                f"Your request for '{medicine.medicine_name}' at {pharmacy.pharmacy_name} was cancelled "
+                f"because the pharmacy no longer lists this medicine."
+            ),
+        )
+        for r in pending
+    ])
+    logger.info("Cancelled %d pending request(s) after stock removal: pharmacy='%s', medicine='%s'",
+                len(pending), pharmacy.pharmacy_name, medicine.medicine_name)
+    return len(pending)

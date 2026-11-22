@@ -1,10 +1,11 @@
 import logging
 from django.contrib import messages
 from django.core.paginator import EmptyPage, PageNotAnInteger, Paginator
-from django.db import IntegrityError
+from django.db import IntegrityError, transaction
 from django.shortcuts import get_object_or_404, redirect, render
 from accounts.decorators import pharmacy_required
 from pharmacies.services import get_pharmacy_for_user
+from requests_app.services import cancel_pending_requests_for_medicine
 from .forms import InventoryAddForm, InventoryEditForm
 from .models import Inventory
 from .services import (
@@ -159,8 +160,14 @@ def inventory_delete_view(request, pk):
     )
 
     if request.method == 'POST':
-        _, med_name = delete_inventory_item(pharmacy, pk)
-        messages.success(request, f"Removed '{med_name}' from pharmacy inventory.")
+        # F6: pending requests for a medicine the pharmacy no longer lists are cancelled.
+        with transaction.atomic():
+            cancelled = cancel_pending_requests_for_medicine(pharmacy, inventory_item.medicine)
+            _, med_name = delete_inventory_item(pharmacy, pk)
+        msg = f"Removed '{med_name}' from pharmacy inventory."
+        if cancelled:
+            msg += f" {cancelled} pending request(s) for it were cancelled and the customers notified."
+        messages.success(request, msg)
         return redirect('inventory_list')
 
     return render(request, 'inventory/delete_confirm.html', {
