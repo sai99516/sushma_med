@@ -22,6 +22,9 @@ from .services import (
 
 logger = logging.getLogger('medfind')
 
+# Both profile forms have a phone_number field; distinct ids avoid duplicate HTML ids (review P6).
+PHARMACY_FORM_AUTO_ID = 'id_pharmacy_%s'
+
 
 def register_customer_view(request):
     """Handles customer account self-registration."""
@@ -72,14 +75,36 @@ def register_pharmacy_view(request):
     return render(request, 'accounts/register_pharmacy.html', {'form': form})
 
 
+def _client_ip(request):
+    """
+    Client IP for rate limiting. Behind a reverse proxy (Render) REMOTE_ADDR is the
+    proxy, so with TRUSTED_PROXY_COUNT=N we take the N-th entry from the right of
+    X-Forwarded-For (entries further left can be forged by the client).
+    """
+    count = settings.TRUSTED_PROXY_COUNT
+    forwarded = request.META.get('HTTP_X_FORWARDED_FOR', '')
+    if count > 0 and forwarded:
+        parts = [p.strip() for p in forwarded.split(',') if p.strip()]
+        if len(parts) >= count:
+            return parts[-count]
+    return request.META.get('REMOTE_ADDR', 'unknown')
+
+
 def _login_rate_keys(request, username):
-    ip = request.META.get('REMOTE_ADDR', 'unknown')
-    return [f"login-fail:ip:{ip}", f"login-fail:user:{username.lower()}"]
+    """
+    Returns (ip_key, ip_user_key). The per-account counter includes the IP, so a
+    stranger cannot lock a user out just by typing their username (review P2).
+    """
+    ip = _client_ip(request)
+    return f"login-fail:ip:{ip}", f"login-fail:ipuser:{ip}:{username.lower()}"
 
 
 def _login_is_blocked(keys):
-    limit = settings.LOGIN_RATE_LIMIT_ATTEMPTS
-    return any((cache.get(k) or 0) >= limit for k in keys)
+    ip_key, ip_user_key = keys
+    return (
+        (cache.get(ip_key) or 0) >= settings.LOGIN_RATE_LIMIT_IP_ATTEMPTS
+        or (cache.get(ip_user_key) or 0) >= settings.LOGIN_RATE_LIMIT_ATTEMPTS
+    )
 
 
 def _login_record_failure(keys):
@@ -111,7 +136,9 @@ def login_view(request):
 
         user, error_msg = authenticate_user(request, username=username, password=password)
         if user is not None:
-            cache.delete_many(rate_keys)
+            # Only the per-account counter is cleared; the per-IP counter is not, so a
+            # successful login with one's own account cannot reset the IP limit (review P3).
+            cache.delete(rate_keys[1])
             login(request, user)
             messages.success(request, f"Welcome back, {user.username}!")
             next_url = request.GET.get('next') or request.POST.get('next')
@@ -132,7 +159,7 @@ def logout_view(request):
     logout(request)
     if username:
         logger.info("User logged out: %s", username)
-    messages.info(request, "You have been logged out safely.")
+        messages.info(request, "You have been logged out safely.")
     return redirect('home')
 
 
@@ -150,7 +177,7 @@ def profile_view(request):
         action = request.POST.get('action', 'user')
 
         if action == 'pharmacy' and pharmacy:
-            pharmacy_form = PharmacyProfileForm(request.POST, instance=pharmacy)
+            pharmacy_form = PharmacyProfileForm(request.POST, instance=pharmacy, auto_id=PHARMACY_FORM_AUTO_ID)
             user_form = UserProfileForm(instance=request.user)
             if pharmacy_form.is_valid():
                 pharmacy, needs_reapproval = apply_pharmacy_profile_update(pharmacy_form, request.user)
@@ -168,7 +195,7 @@ def profile_view(request):
                 messages.error(request, "Please correct the errors in the pharmacy details form.")
         else:
             user_form = UserProfileForm(request.POST, instance=request.user)
-            pharmacy_form = PharmacyProfileForm(instance=pharmacy) if pharmacy else None
+            pharmacy_form = PharmacyProfileForm(instance=pharmacy, auto_id=PHARMACY_FORM_AUTO_ID) if pharmacy else None
             if user_form.is_valid():
                 user_form.save()
                 logger.info("User profile updated for user: %s", request.user.username)
@@ -178,7 +205,7 @@ def profile_view(request):
                 messages.error(request, "Please correct the errors in your personal details form.")
     else:
         user_form = UserProfileForm(instance=request.user)
-        pharmacy_form = PharmacyProfileForm(instance=pharmacy) if pharmacy else None
+        pharmacy_form = PharmacyProfileForm(instance=pharmacy, auto_id=PHARMACY_FORM_AUTO_ID) if pharmacy else None
 
     context = {
         'form': user_form,

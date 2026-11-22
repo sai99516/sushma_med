@@ -11,7 +11,7 @@ databases:
 services:
   - type: web
     name: medifind
-    env: python
+    runtime: python  # 'env' is the deprecated name of this field
     plan: free
     region: oregon
     buildCommand: "./build.sh"
@@ -34,6 +34,9 @@ services:
         value: "True"
       - key: SECURE_HSTS_SECONDS
         value: "31536000"
+      # Render's proxy appends the client IP to X-Forwarded-For (used by the login rate limit).
+      - key: TRUSTED_PROXY_COUNT
+        value: "1"
       - key: PYTHON_VERSION
         value: "3.11.9"
       # Email for password reset (review N6). Fill these in the Render dashboard.

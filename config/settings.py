@@ -214,8 +214,12 @@ SERVER_EMAIL = os.environ.get('SERVER_EMAIL', DEFAULT_FROM_EMAIL)
 # Login rate limiting (review known #6): simple cache-based counter,
 # no extra dependency. After LOGIN_RATE_LIMIT_ATTEMPTS failed logins for the
 # same username or IP, further attempts are blocked for LOGIN_RATE_LIMIT_WINDOW seconds.
-LOGIN_RATE_LIMIT_ATTEMPTS = int(os.environ.get('LOGIN_RATE_LIMIT_ATTEMPTS', '5'))
+LOGIN_RATE_LIMIT_ATTEMPTS = int(os.environ.get('LOGIN_RATE_LIMIT_ATTEMPTS', '5'))         # per IP + username
+LOGIN_RATE_LIMIT_IP_ATTEMPTS = int(os.environ.get('LOGIN_RATE_LIMIT_IP_ATTEMPTS', '20'))  # per IP, any username
 LOGIN_RATE_LIMIT_WINDOW = int(os.environ.get('LOGIN_RATE_LIMIT_WINDOW', '900'))
+# Number of reverse proxies in front of the app that append to X-Forwarded-For
+# (Render: 1). 0 = use REMOTE_ADDR (local development).
+TRUSTED_PROXY_COUNT = int(os.environ.get('TRUSTED_PROXY_COUNT', '0'))
 
 # Centralized Logging Configuration
 LOGGING = {
