@@ -251,3 +251,93 @@ Second read-only pass (2026-11-22). I read every app, the templates, tests, sett
 8. **N7** database-side pagination and bounding-box distance filter.
 9. **N30–N33** fix the broken or weak tests and add regression tests for the items above.
 10. The remaining Low items, then update or delete the outdated docs in `docs/`.
+
+---
+
+## Fix log
+
+Fixes made on branch `fix/all` (2026-11-22), one commit per phase. As instructed, **no tests were run** and no new tests were written. Existing tests that the fixes would break were updated, but they were not run. Checks that were run: `python manage.py check` (no issues), `python manage.py makemigrations --check` (no changes), and `migrate` on a **copy** of `db.sqlite3` (all 6 new migrations applied; 5 pharmacies became APPROVED, 1 PENDING). The real `db.sqlite3` was not touched.
+
+| Commit | Phase | Findings |
+|---|---|---|
+| `bf3dcea`, `af04651` (earlier) | Step 0, first N1 pass | `*:Zone.Identifier` ignored and untracked; popup values escaped |
+| `ba2c406` (earlier) | Test fixture | N30 |
+| Phase 1 | Security | N1 (DOM nodes + `textContent`, `data-*` instead of `escapejs` in `onclick`), N2, known #1, #2, #6, #7, N12, N27, N32, N36, N37, N38 |
+| Phase 2 | Requests and approval | N3, N4, N5, N9, N15, N18, N19, N24, N29, known #5 |
+| Phase 3 | Data and permissions | N8, N11, N16, N21, N22, N23, N26, N28, phone validation, medicine archive |
+| Phase 4 | Search, wording, UX, speed | known #3, #4, N7, N10, N13, N14, N17, N20, N31, N34, N39, N40, "Low Stock (1–10 units)" label |
+| Phase 5 | Deployment and cleanup | N6, N41, N35 (documented), N42, README.md, docs/README_DOCS_STATUS.md |
+
+Decisions applied:
+- A request can be answered only once, while it is PENDING (conditional `UPDATE ... WHERE status='PENDING'` in `transaction.atomic()`).
+- Add-stock keeps "replace quantity". The field is labelled "Set quantity" and the help text says it replaces.
+- Registration "already exists" messages are unchanged (N25).
+- An approved pharmacy that changes name, address, city, pincode or lat/lng goes back to PENDING (`apply_pharmacy_profile_update`).
+- A revoked pharmacy cannot add, edit or delete stock or respond to requests. On revoke, its PENDING requests are cancelled and the customers are notified.
+- Login rate limiting: a simple cache-based counter in `accounts/views.py` (5 failed attempts per IP or per username, then blocked for 15 minutes, HTTP 429). No extra dependency. It uses Django's default local-memory cache, so the limit applies per process.
+- Approval status: a new `Pharmacy.approval_status` (PENDING / APPROVED / REVOKED). `is_approved` is kept in sync so public filters still work.
+
+New migrations (run `python manage.py migrate` on Render; `build.sh` already does this):
+`accounts.0003_alter_user_phone_number`, `inventory.0003_inventory_low_stock_label`, `medicines.0003_medicine_is_active_and_more`, `pharmacies.0003_pharmacy_approval_status` (with data backfill), `pharmacies.0004_alter_pharmacy_latitude_alter_pharmacy_longitude_and_more` (owner becomes OneToOne), `requests_app.0003_availabilityrequest_protect_fks`.
+
+Pre-checks on the current `db.sqlite3` (read-only): no duplicate medicines (N28), no owner with two pharmacies (N11), no coordinates out of range (N8).
+
+## Status of all findings
+
+| ID | Status | Notes |
+|---|---|---|
+| Known #1 | Fixed | DEBUG defaults to False; `ImproperlyConfigured` if `SECRET_KEY` is missing and DEBUG is off; no `*` host default; local `.env` with `DEBUG=True` still works; local-safe `.env.example` and new `.env.production.example`. |
+| Known #2 | Fixed | `seed_data` raises `CommandError` when DEBUG is False. |
+| Known #3 | Fixed | Explicit `Case/When` rank (In Stock, Low Stock, Out of Stock) in search and medicine detail. |
+| Known #4 | Fixed | "Live Stock", "Real-time", "Verified Fresh" replaced with "Pharmacy-reported · updated X ago" wording. |
+| Known #5 | Fixed | Sensitive profile changes send an approved pharmacy back to PENDING, with an owner notification. |
+| Known #6 | Fixed | Logout is POST only (form in `base.html`). Login rate limit via the cache (see Fix log). |
+| Known #7 | Fixed | Generic messages for users; details go to the log with `logger.exception`. |
+| Low Stock label | Fixed | "Low Stock (1–10 units)". |
+| N1 | Fixed | `buildPopup()` builds DOM nodes with `textContent` on all 4 map pages; "Pin on Map" uses `data-*` attributes. Other templates checked: no raw pharmacy fields in JS. |
+| N2 | Fixed | Demo logins shown only when `settings.DEBUG` is True (base, home, login). |
+| N3 | Fixed | Respond only while PENDING; "Respond" hidden for answered requests. |
+| N4 | Fixed | Conditional update in `transaction.atomic()` for respond and cancel. |
+| N5 | Fixed | Explicit `action=approve|revoke`, idempotent, clearer wording. |
+| N6 | Fixed | All `EMAIL_*`, `DEFAULT_FROM_EMAIL` and `SERVER_EMAIL` are read from env; placeholders in `render.yaml`. |
+| N7 | Fixed | Database-side filtering, Haversine distance expression, ordering and pagination; bounding box before the distance filter; map pins only for the current page (max 100). An empty search loads one page. |
+| N8 | Fixed | Model validators (±90 / ±180) used by all 3 forms; pins use `is_valid_coordinate()`, so 0 is kept. |
+| N9 | Fixed | No duplicate PENDING request; an Inventory row is required; per-customer limit of 10 requests per 60 minutes. |
+| N10 | Fixed | Digits in the home "City or Pincode" box are used as a pincode (handled in the search views). |
+| N11 | Fixed | `Pharmacy.owner` is a `OneToOneField` (`related_name='pharmacy'`); `get_pharmacy_for_user` uses `user.pharmacy`. |
+| N12 | Fixed | Stray `} }` removed. |
+| N13 | Fixed | Footer link points to `pharmacy_discovery`. |
+| N14 | Fixed | Exact pincode match. |
+| N15 | Fixed | Django-admin actions call `set_pharmacy_approval`; approval fields are read-only in the admin form. |
+| N16 | Fixed | `is_staff` alone no longer means app admin; `@customer_required` on the customer dashboard; decorators use `redirect_to_login` (`?next=`). Admins can still open customer and pharmacy pages (unchanged on purpose). |
+| N17 | Fixed | `TIME_ZONE = 'Asia/Kolkata'`. |
+| N18 | Fixed | `approval_status` field with data migration; admin queue, filters and dashboard counts use it. |
+| N19 | Fixed | On revoke, PENDING requests are cancelled and customers notified; a revoked pharmacy cannot change stock or respond. |
+| N20 | Fixed | One rule: `is_stale` is derived from `freshness_tier` (over 24h). |
+| N21 | Fixed | "Set quantity" label and help text. The docs that say "increments" are listed in `docs/README_DOCS_STATUS.md` (docs/ files were not edited). |
+| N22 | Fixed | Dead inactive-account branch removed. |
+| N23 | Fixed | `min_length=8`. |
+| N24 | Fixed | `transaction.atomic()` around customer registration, approval, and request create/respond. |
+| N25 | Skipped | Decision: keep the "already exists" messages. |
+| N26 | Fixed | Licence number shown only to the owner and admins; removed from public search. |
+| N27 | Fixed | Registration log line has username and id, no email. |
+| N28 | Fixed | Case-insensitive `UniqueConstraint` (name, strength, dosage form). No existing duplicates. |
+| N29 | Fixed | `PROTECT` on `AvailabilityRequest.pharmacy` and `.medicine` (migration). |
+| N30 | Fixed | Earlier commit `ba2c406`. |
+| N31 | Fixed | The stale-badge test also checks that the badge is absent for fresh items and that the fresh wording is absent for the stale item. |
+| N32 | Fixed | Logout tests use POST; `test_security` also checks that GET returns 405. |
+| N33 | Skipped | Instructions for this pass: no new tests. Regression tests for N1 and N2 already exist (`tests/test_xss_map_popups.py`, `tests/test_demo_logins.py`). N3, known #3 and N10 still have no dedicated test. |
+| N34 | Fixed | `get_or_create` for notifications; unchanged stock is not re-saved; some rows backdated (30h / 60h / 72h) to demo the badges. |
+| N35 | Skipped (by instruction) | `db.sqlite3` was not deleted. README explains how to rebuild it: back it up, `migrate`, `seed_data`. |
+| N36 | Fixed | Manifest storage only when deployed (`DATABASE_URL` set) or `USE_MANIFEST_STATIC=True`; otherwise WhiteNoise serves from the finders. |
+| N37 | Fixed | `render.yaml` lists only the real origin (placeholder `https://medifind.onrender.com`). |
+| N38 | Fixed | SRI on Bootstrap CSS/JS and Bootstrap Icons; Chart.js pinned to 4.4.1 with SRI. |
+| N39 | Fixed | Unread count computed once per request and reused; `|length` instead of a double `.count`; pharmacy detail stock list paginated (20 per page). |
+| N40 | Fixed | Welcome notification uses "pharmacy-reported" wording. |
+| N41 | Fixed | Pillow removed; all packages pinned to the versions installed in the venv. |
+| N42 | Fixed | The project is now in git with history. README notes that free Render Postgres has no backups. |
+| docs: phone validation | Fixed | Lenient validator (7–15 digits; `+`, spaces, dashes, brackets) on User and Pharmacy phones and the owner phone. |
+| docs: medicine archive | Fixed | `Medicine.is_active`; archived medicines are hidden from public search, the medicine detail page, the add-stock form and new requests. |
+| docs: medicine detail distances | Skipped | Not a tiny change. |
+| docs: approval audit trail / rejection reason | Open | Only log lines and owner notifications; no stored history or reason. |
+| docs: outdated docs | Open | Listed in `docs/README_DOCS_STATUS.md`; no file in `docs/` was edited or deleted. |

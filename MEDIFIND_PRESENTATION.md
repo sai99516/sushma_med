@@ -177,3 +177,41 @@ Second pass (2026-11-22), from reading the code only. Details and fixes are in `
 11. **Q5 (approval):** approval controls public visibility, but a revoked pharmacy can still manage stock and answer old requests (review N19). Add that to the limitations if asked.
 12. **Test numbers:** the `docs/` reports give anything from 17 to 136 tests. The code has 136 test functions (counted, not run). Quote that number only after running `python manage.py test tests` yourself. One fixture in `tests/test_admin_portal.py:102-113` silently fails (review N30).
 13. **Section 5 "email defaults to the console":** in production, setting `EMAIL_HOST` etc. as `.env.example` suggests does nothing, because settings never read those variables (review N6). So password reset does not work on Render as configured.
+
+---
+
+## Updated notes after fixes
+
+After the fixes on branch `fix/all` (see "Fix log" in `MEDIFIND_REVIEW.md`). Tests were not run, so run `python manage.py test tests` yourself before quoting any test results.
+
+**Remove or replace these earlier claims**
+- Remove the XSS warning in note 1 above. Map popups are now built from DOM nodes with `textContent`, so pharmacy names and addresses are never parsed as HTML. If asked, say: "Map data is passed with `json_script`, and popups set text with `textContent`, not HTML strings." Still do not claim "fully secure": the app has had no external security test.
+- Do not describe the stock as "live" or "real-time". The UI now says "Pharmacy-reported · updated X ago".
+- Section 5 "Security items still to fix" and section 7 are done: safe settings defaults, `seed_data` blocked when DEBUG=False, POST logout, login rate limit, pinned packages, and Chart.js 4.4.1 with SRI. Notes 3–8, 10, 11 and 13 above are also fixed.
+
+**Changed setup**
+- `cp .env.example .env` is now the right local setup (DEBUG=True, SQLite). Without `DEBUG=True`, the app will not start unless `SECRET_KEY` and `ALLOWED_HOSTS` are set.
+- Demo logins appear on the page only when DEBUG=True. Keep the table in section 1 handy.
+
+**Changed demo steps**
+- **Sign out** is now a button in the user menu (POST form), not a link.
+- **Approve (1:30):** the buttons are explicit "Approve" / "Revoke". Clicking twice does nothing extra ("already approved"). The admin list has Pending / Approved / Revoked filters.
+- **Pharmacy confirms (3:50):** a request can be answered **only once**. After the answer, the inbox shows "Answered" instead of "Respond".
+- **Search (0:30 / 3:00):** results are ordered In Stock, then Low Stock, then Out of Stock. A pincode typed in the home search box now works.
+- **Request (3:20):** a customer can only request a medicine the pharmacy lists, cannot send a second pending request for the same medicine at the same pharmacy, and can send at most 10 requests per hour.
+- **Freshness:** `seed_data` now backdates some stock rows, so you can show the "updated 24–48h ago" and "over 48h ago · confirm before visiting" badges.
+- **Optional extra demo:** as `pending_owner` (after approval), change the pharmacy address in the profile. It goes back to "Pending" and disappears from search until the admin approves it again.
+
+**New or updated limitations (slide 7 / section 5)**
+- Stock is still self-reported; anything older than 24h tells the customer to confirm first.
+- Login rate limiting is per server process (local-memory cache), not shared across instances.
+- Revoking a pharmacy cancels its pending requests; there is no stored approval history or rejection reason.
+- One owner manages exactly one pharmacy.
+- Notifications are in-app only. Password reset email works only after the `EMAIL_*` variables are filled in on Render.
+- The medicine detail page shows no distances.
+- Many files in `docs/` are outdated; see `docs/README_DOCS_STATUS.md`.
+
+**Answers that changed**
+- Q6 (roles): an `is_staff` user without the ADMIN role or superuser status no longer gets the admin portal. Admins can still open customer and pharmacy pages.
+- Q5 (approval): approval has three states (Pending, Approved, Revoked). A revoked pharmacy is hidden and cannot change stock or answer requests.
+- Q10 (what next): automatic stock sync, an approval audit log, and email/SMS alerts.
