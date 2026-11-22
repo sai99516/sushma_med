@@ -149,7 +149,7 @@
 
     L.marker([p.lat, p.lng])
       .addTo(map)
-      .bindPopup(`<strong>${p.name}</strong><br>${p.address}`)
+      .bindPopup(`<strong>${escapeHtml(p.name)}</strong><br>${escapeHtml(p.address)}`)
       .openPopup();
   });
 </script>

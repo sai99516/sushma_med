@@ -393,17 +393,17 @@
     if (pinsData.length > 0) {
       pinsData.forEach(p => {
         const marker = L.marker([p.lat, p.lng]).addTo(markersLayer);
-        const distBadge = p.distance_km !== null ? `<span style="font-size: 0.75rem; background: #E0F2FE; color: #0369A1; padding: 2px 6px; border-radius: 10px; font-weight: 600;">${p.distance_km} km away</span>` : '';
+        const distBadge = p.distance_km !== null ? `<span style="font-size: 0.75rem; background: #E0F2FE; color: #0369A1; padding: 2px 6px; border-radius: 10px; font-weight: 600;">${escapeHtml(p.distance_km)} km away</span>` : '';
         const popupContent = `
           <div style="min-width: 190px; font-family: 'Plus Jakarta Sans', sans-serif;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
-              <strong style="color: #102A43;">${p.name}</strong>
+              <strong style="color: #102A43;">${escapeHtml(p.name)}</strong>
             </div>
             ${distBadge}
-            <div style="font-size: 0.82rem; color: #64748B; margin-top: 4px;">${p.address}</div>
-            <div style="font-size: 0.82rem; color: #16A34A; margin-top: 2px;"><strong>${p.medicine}</strong>: ${p.status}</div>
+            <div style="font-size: 0.82rem; color: #64748B; margin-top: 4px;">${escapeHtml(p.address)}</div>
+            <div style="font-size: 0.82rem; color: #16A34A; margin-top: 2px;"><strong>${escapeHtml(p.medicine)}</strong>: ${escapeHtml(p.status)}</div>
             <div style="margin-top: 6px;">
-              <a href="tel:${p.phone}" style="font-size: 0.82rem; color: #0EA5A4; text-decoration: none; font-weight: 600;">📞 ${p.phone}</a>
+              <a href="tel:${escapeHtml(p.phone)}" style="font-size: 0.82rem; color: #0EA5A4; text-decoration: none; font-weight: 600;">📞 ${escapeHtml(p.phone)}</a>
             </div>
           </div>
         `;
@@ -486,7 +486,7 @@
       mapInstance.setView([lat, lng], 15);
       L.popup()
         .setLatLng([lat, lng])
-        .setContent(`<strong>${pharmacyName}</strong><br><span>${medicineName}</span>`)
+        .setContent(`<strong>${escapeHtml(pharmacyName)}</strong><br><span>${escapeHtml(medicineName)}</span>`)
         .openOn(mapInstance);
     }
   }
