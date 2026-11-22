@@ -22,3 +22,4 @@ Thumbs.db
 # End-to-end test artefacts
 e2e/screenshots/
 .pytest_cache/
+.ruff_cache/

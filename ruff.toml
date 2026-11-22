@@ -1,0 +1,7 @@
+# Lint settings (F9). Run: python -m ruff check .
+target-version = "py311"
+extend-exclude = ["staticfiles", "e2e/screenshots"]
+
+[lint]
+# F = pyflakes (unused imports/variables, undefined names), E9 = syntax errors.
+select = ["F", "E9"]
