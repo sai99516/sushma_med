@@ -404,3 +404,42 @@ Checked and found OK (no change needed): password reset does not crash when SMTP
 **Test suite:** 150 → 158 tests, **158 passed**, no failures in the full run. `makemigrations --check`: no changes.
 
 **New migration to run on Render:** `pharmacies.0005_pharmacy_pincode_validator` (`build.sh` runs `migrate`). **New env var:** `TRUSTED_PROXY_COUNT=1` (already in `render.yaml` and `.env.production.example`).
+
+## End-to-end browser test results
+
+Branch `test/e2e` (from `main`, 2026-11-22). Real Chromium (Playwright 1.65.2, headless), driven with real clicks and typing.
+
+**Setup**
+- Tests are in `e2e/` (not in `tests/`, so `manage.py test tests` stays fast). Dev-only packages are in `requirements-dev.txt` (pytest, playwright, pytest-playwright); `requirements.txt` is unchanged.
+- Each run builds a **fresh copy** of the database in a temp directory (`migrate` + `seed_data`) and starts `runserver` on port 8001 with `DEBUG=True` and `DATABASE_URL` pointing at that copy. `db.sqlite3` is never touched.
+- Run: `.venv/bin/python -m playwright install chromium`, then `.venv/bin/python -m pytest e2e`. On this WSL machine Chromium needed `libatomic1` and `libasound2`, which were unpacked without sudo into `~/.local/pwlibs` (`conftest.py` adds that folder to `LD_LIBRARY_PATH` if it exists). On a normal machine, `playwright install-deps chromium` does the same.
+- Every test records `console.error`, uncaught page errors, failed requests and 4xx/5xx responses. Any of these fails the test, except statuses a test expects on purpose (404 for another user's data, 405 for GET logout, 429 for the login lockout). OpenStreetMap tiles are replaced with a blank PNG, so the tests do not depend on (or load) the public tile server. CDN files (Bootstrap, Leaflet, Chart.js, fonts) are loaded for real.
+- Screenshots go to `e2e/screenshots/` (gitignored): `FAILED_<test>_<n>.png` on failure, and `viewport_<width>_<page>.png` for the 375px and 1280px checks. The server log of the run is copied to `e2e/screenshots/server.log`.
+
+**What was covered (68 tests, 7 files)**
+1. Visitor (`test_visitor.py`, 15): home counts against the database, disclaimer banner, hero search by name and by a 6-digit pincode; search with each filter (name, category, dosage form, strength, city, pincode, each stock status); In Stock > Low > Out order across all pages and for one medicine at three pharmacies; Reset All, no-results state and its reset button; pagination (Next/Last/First, filters kept); geolocation allowed (mocked location, distance sort, 5 km radius, Clear) and denied (message, no reload); map toggle, pin count = data, click a pin, popup text, "Pin on Map"; medicine detail + map; pharmacy directory + map popup link → pharmacy detail + map; stale badge for 72h-old stock vs fresh; 7 main pages at 375px and 1280px (no horizontal scroll, hamburger menu on mobile).
+2. Registration and login (`test_auth.py`, 13): customer registration (valid then login, duplicate username, weak password, mismatched passwords); pharmacy registration (valid → pending, bad pincode, lat 95 / lng -200); login valid, wrong password, 5 wrong then lockout (even with the right password); Sign Out button; full password reset (link read from the console email in the server log, new password, login); profile edit (and invalid phone); change password (old one stops working).
+3. Admin (`test_admin.py`, 6): dashboard and Chart.js bar chart; pending queue; Approve double-click plus a second click from a stale tab (stays approved, "already approved", one notification); revoke (pending request cancelled, customer and owner notified, hidden from search); catalogue add, duplicate rejected, edit, archive; users list and all-requests list with search/filter; Django `/admin/` login and the Pharmacies list.
+4. Pharmacy owner (`test_pharmacy.py`, 9): dashboard and doughnut chart (seeded pharmacy, and a brand-new pharmacy with no stock); approval notification and bell count; add Dolo 650 with 25 (In Stock), set 10 (Low), 0 (Out), negative blocked, re-add updates, delete; inventory search/filter/sort; inbox confirm and decline with a message, second response blocked ("Answered"); profile edit (phone only stays approved; address → pending and hidden; also via the profile page form); revoked pharmacy cannot add/edit/delete stock or answer requests.
+5. Customer (`test_customer.py`, 5): dashboard; search → "Request Availability" (valid, duplicate blocked, quantity 0 and 1001 rejected); My Requests tabs with counts; cancel with the confirm dialog (accepted and dismissed); pharmacy cannot answer the cancelled request; notifications (unread badge, mark one, Unread filter, mark all, another user's notification → 404 and unchanged).
+6. Security (`test_security.py`, 19): `<img src=x onerror=window.__xss=1>` as pharmacy name and address on the search page + map popups + Pin on Map, medicine detail map, pharmacy detail map, directory + map + Pin, home page, admin dashboard pending queue, admin pending list (`window.__xss` stays undefined, no `<img>` in popups, no request to `/x`); 12 direct-URL cases across anonymous/customer/pharmacy (redirected with the right message); owner opening another pharmacy's stock edit/delete and request respond → 404; customer at `/admin/` → admin login; GET `/accounts/logout/` → 405 and the session stays.
+7. Demo script (`test_00_demo_script.py`, 1): the whole 5-minute script from `MEDIFIND_PRESENTATION.md` section 3, in one browser, logging in and out with the Sign Out button: visitor home + search + map, admin approves Metro Life, `pending_owner` sees the notification and adds Dolo 650 × 25 (In Stock), `customer1` finds Metro Life and requests 2 units with a note, the owner confirms with a message, `customer1` sees "Confirmed Available" and the notification.
+
+**Result of the single full run:** 68 tests, **67 passed, 1 failed** (2 min 4 s). The server log had no tracebacks and no 500s.
+
+Wrong tests found and fixed while writing them (not app bugs): ambiguous locators (two "Find Medicine" links, two alerts, two "All Inquiries" links), a wrong seed medicine name, the transient second Leaflet popup during its fade-out, and the DEBUG 404 page wording. The assumption that the browser blocks quantity 0 was wrong; that turned into E2.
+
+**Real bugs**
+
+| ID | Severity | Page / URL | What is wrong | Console / evidence | Screenshot |
+|---|---|---|---|---|---|
+| E1 | Low | `/admin/pharmacies/pharmacy/` (any Django admin change list) | Django 5.2's admin script `RelatedObjectLookups.js` registers a `window` `unload` listener. Current Chromium blocks `unload` by default, so every admin list page logs a console error. Upstream Django (6.x) already uses `pagehide`; 5.2.19, the latest 5.2 release, still uses `unload`. | `Permissions policy violation: unload is not allowed in this document. @ http://127.0.0.1:8001/static/admin/js/admin/RelatedObjectLookups.js` | `e2e/screenshots/FAILED_test_django_admin_login_chromium__0.png` |
+| E2 | Low | `/requests/create/<pharmacy_id>/<medicine_id>/` | The quantity input is rendered as `<input type="number" … min="0" value="1" … value="1">`. The form sets `min="1"`, but the model's `PositiveIntegerField` overrides it with `min="0"`, and `value` appears twice (invalid HTML). So the browser accepts 0 and has no upper limit; only the server rejects 0 and 1001 (with correct messages). | no console error; found when the browser did not block quantity 0 (`test_request_availability_valid_duplicate_and_bad_quantities`) | – |
+
+Not bugs (checked): latitude/longitude inputs have no `min`/`max`, but the server rejects 95 and -200 with clear messages; no horizontal overflow at 375px on the 7 main pages; no XSS anywhere it was tried.
+
+**Not tested in the browser, and why**
+- Real email delivery (console backend only; the reset link was taken from the server log).
+- Firefox and WebKit: only Chromium was installed.
+- OpenStreetMap tile images (stubbed on purpose); the request rate limit of 10 per hour and the per-IP login limit of 20 (covered by unit tests; hitting them here would affect other tests).
+- Production settings (DEBUG=False, WhiteNoise, HTTPS): the run uses `runserver` with DEBUG=True as requested.

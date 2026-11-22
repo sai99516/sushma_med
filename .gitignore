@@ -18,3 +18,7 @@ scratch/
 Thumbs.db
 
 *:Zone.Identifier
+
+# End-to-end test artefacts
+e2e/screenshots/
+.pytest_cache/
