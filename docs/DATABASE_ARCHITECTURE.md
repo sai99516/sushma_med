@@ -1,88 +1,159 @@
-# MediFind – Database Architecture Document
+# Database
 
-## 1. Overview
-The database layer for MediFind utilizes a normalized relational architecture managed via the Django 5.2 ORM. It guarantees referential integrity, eliminates redundant storage, prevents anomalous inventory operations, and optimizes lookup performance with strategic database indexing.
+**Purpose:** The tables (models), their fields, relations, constraints and indexes, and how to rebuild the local database.
+**Who it is for:** Developers changing models or queries, and examiners asking about the data design.
+**Last verified:** 2026-11-22 against commit `dd2f32c` (6 models, 17 migrations, 15 named indexes).
 
-## 2. Entity Relationship Specifications
+Django "models" are Python classes; each one is a database table. Django's ORM (object-relational mapper)
+turns Python queries into SQL, so the code has no raw SQL. Locally the database is the SQLite file
+`db.sqlite3`; in production it is PostgreSQL (chosen by `DATABASE_URL`, see `config/settings.py`).
+Times are stored in UTC (`USE_TZ = True`) and shown in Asia/Kolkata time.
 
-### 2.1 Custom User (`accounts_user`)
-Inherits from Django's `AbstractUser`, configured as `AUTH_USER_MODEL` before initial migration.
-- `id`: AutoField (Primary Key)
-- `username`: CharField(150, unique=True)
-- `email`: EmailField(unique=True)
-- `password`: CharField(128) - PBKDF2 with SHA256 hashed
-- `role`: CharField(20, choices=[('CUSTOMER', 'Customer'), ('PHARMACY', 'Pharmacy Owner'), ('ADMIN', 'Administrator')])
-- `phone_number`: CharField(15, blank=True)
-- `date_joined`: DateTimeField(auto_now_add=True)
-- `is_active`: BooleanField(default=True)
-- `is_staff`: BooleanField(default=False)
-- `is_superuser`: BooleanField(default=False)
+## 1. Diagram
 
-### 2.2 Pharmacy (`pharmacies_pharmacy`)
-Represents registered pharmacy units operated by pharmacy owners.
-- `id`: AutoField (Primary Key)
-- `owner`: OneToOneField/ForeignKey to `User` (on_delete=models.CASCADE, related_name='pharmacy')
-- `pharmacy_name`: CharField(200)
-- `registration_number`: CharField(100, unique=True, db_index=True)
-- `address`: TextField()
-- `city`: CharField(100, db_index=True)
-- `state`: CharField(100)
-- `pincode`: CharField(20, db_index=True)
-- `phone_number`: CharField(15)
-- `latitude`: DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
-- `longitude`: DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
-- `is_approved`: BooleanField(default=False, db_index=True)
-- `created_at`: DateTimeField(auto_now_add=True)
+```mermaid
+erDiagram
+    USER ||--o| PHARMACY : "owns (one-to-one)"
+    USER ||--o{ AVAILABILITY_REQUEST : "sends (as customer)"
+    USER ||--o{ NOTIFICATION : "receives"
+    PHARMACY ||--o{ INVENTORY : "lists"
+    MEDICINE ||--o{ INVENTORY : "is listed in"
+    PHARMACY ||--o{ AVAILABILITY_REQUEST : "receives"
+    MEDICINE ||--o{ AVAILABILITY_REQUEST : "is asked about"
+```
 
-### 2.3 Medicine (`medicines_medicine`)
-Master catalog of verified medicines.
-- `id`: AutoField (Primary Key)
-- `medicine_name`: CharField(200, db_index=True)
-- `generic_name`: CharField(200, db_index=True)
-- `strength`: CharField(100) (e.g., "500 mg", "10 ml", "250 mcg")
-- `dosage_form`: CharField(100) (e.g., "Tablet", "Capsule", "Syrup", "Injection", "Ointment")
-- `category`: CharField(100, db_index=True) (e.g., "Antibiotics", "Analgesics", "Antidiabetic", etc.)
-- `description`: TextField(blank=True)
-- `created_at`: DateTimeField(auto_now_add=True)
+## 2. Models
 
-### 2.4 Inventory (`inventory_inventory`)
-Bridge relation associating specific pharmacies with stock levels of medicine catalog items.
-- `id`: AutoField (Primary Key)
-- `pharmacy`: ForeignKey to `Pharmacy` (on_delete=models.CASCADE, related_name='inventories')
-- `medicine`: ForeignKey to `Medicine` (on_delete=models.CASCADE, related_name='pharmacy_inventories')
-- `quantity`: PositiveIntegerField(default=0, validators=[MinValueValidator(0)])
-- `availability_status`: CharField(20, choices=[('IN_STOCK', 'In Stock'), ('LOW_STOCK', 'Low Stock'), ('OUT_OF_STOCK', 'Out of Stock')], default='OUT_OF_STOCK', db_index=True)
-- `updated_at`: DateTimeField(auto_now=True)
-- **Constraints**:
-  - `unique_together = ('pharmacy', 'medicine')`
-  - Automatic status derivation in `save()`:
-    - `quantity == 0` -> `OUT_OF_STOCK`
-    - `1 <= quantity <= 10` -> `LOW_STOCK`
-    - `quantity > 10` -> `IN_STOCK`
+### User (`accounts/models.py`, table `accounts_user`)
+Extends Django's `AbstractUser` (username, password hash, first/last name, `is_staff`, `is_superuser`,
+`is_active`, `date_joined`, …). Set as `AUTH_USER_MODEL = 'accounts.User'`.
 
-### 2.5 AvailabilityRequest (`requests_app_availabilityrequest`)
-Customer-initiated inquiry lifecycle entity.
-- `id`: AutoField (Primary Key)
-- `customer`: ForeignKey to `User` (on_delete=models.CASCADE, related_name='customer_requests')
-- `pharmacy`: ForeignKey to `Pharmacy` (on_delete=models.CASCADE, related_name='pharmacy_requests')
-- `medicine`: ForeignKey to `Medicine` (on_delete=models.CASCADE, related_name='availability_requests')
-- `quantity_requested`: PositiveIntegerField(default=1, validators=[MinValueValidator(1)])
-- `request_message`: TextField(blank=True)
-- `status`: CharField(20, choices=[('PENDING', 'Pending'), ('CONFIRMED', 'Confirmed Available'), ('UNAVAILABLE', 'Unavailable'), ('CANCELLED', 'Cancelled')], default='PENDING', db_index=True)
-- `pharmacy_response`: TextField(blank=True)
-- `created_at`: DateTimeField(auto_now_add=True)
-- `updated_at`: DateTimeField(auto_now=True)
+| Field | Type and rules |
+|---|---|
+| `email` | unique |
+| `role` | `CUSTOMER` (default) / `PHARMACY` / `ADMIN`, indexed |
+| `phone_number` | up to 20 characters, optional, phone validator (7–15 digits) |
+| `created_at` | set on create |
 
-### 2.6 Notification (`requests_app_notification`)
-User notification messaging queue.
-- `id`: AutoField (Primary Key)
-- `user`: ForeignKey to `User` (on_delete=models.CASCADE, related_name='notifications')
-- `message`: TextField()
-- `is_read`: BooleanField(default=False)
-- `created_at`: DateTimeField(auto_now_add=True)
+### Pharmacy (`pharmacies/models.py`)
 
-## 3. Database Indexes & Query Optimizations
-- `medicines_medicine(medicine_name, generic_name, category)` indexed for fast multi-field ILIKE searching.
-- `pharmacies_pharmacy(city, pincode, is_approved)` indexed to filter public stock queries quickly.
-- `inventory_inventory(availability_status, updated_at)` indexed for dashboard aggregation metrics.
-- `unique_together` on `Inventory(pharmacy, medicine)` prevents accidental duplicate inventory rows.
+| Field | Type and rules |
+|---|---|
+| `owner` | **OneToOneField** to User, `related_name='pharmacy'`, delete owner → delete pharmacy (CASCADE) |
+| `pharmacy_name` | up to 200, indexed |
+| `registration_number` | licence number, **unique**, indexed |
+| `address` | text |
+| `city` | indexed; `state` |
+| `pincode` | indexed, validator: 6 digits, first digit 1–9 (`accounts/validators.py:29`) |
+| `phone_number` | phone validator |
+| `latitude`, `longitude` | Decimal(9, 6), optional, validators −90..90 and −180..180 |
+| `approval_status` | `PENDING` (default) / `APPROVED` / `REVOKED`, indexed |
+| `is_approved` | Boolean, indexed. Kept in sync by `save()`: True only when `approval_status` is APPROVED |
+| `created_at` | set on create |
+
+Public pages filter on `is_approved=True`; admin pages filter on `approval_status`.
+
+### Medicine (`medicines/models.py`)
+
+| Field | Type and rules |
+|---|---|
+| `medicine_name`, `generic_name` | up to 200, indexed |
+| `strength` | for example "650mg" |
+| `dosage_form` | one of 8 choices (Tablet, Capsule, Syrup, …), indexed |
+| `category` | one of 11 choices, indexed |
+| `description` | optional text |
+| `is_active` | default True; False = archived (hidden from public pages and new stock/requests), indexed |
+| `created_at` | set on create |
+
+Constraint `unique_medicine_name_strength_form`: name + strength (both ignoring case) + dosage form must be unique.
+
+### Inventory (`inventory/models.py`)
+One row = one medicine at one pharmacy.
+
+| Field | Type and rules |
+|---|---|
+| `pharmacy` | FK to Pharmacy, CASCADE, `related_name='inventories'` |
+| `medicine` | FK to Medicine, CASCADE |
+| `quantity` | positive integer (0 or more) |
+| `availability_status` | `IN_STOCK` / `LOW_STOCK` / `OUT_OF_STOCK`, **computed in `save()`** from quantity (>10, 1–10, 0) |
+| `updated_at` | set on every save; drives the freshness wording |
+
+`unique_together = ('pharmacy', 'medicine')`: a pharmacy lists each medicine once.
+
+### AvailabilityRequest (`requests_app/models.py`)
+
+| Field | Type and rules |
+|---|---|
+| `customer` | FK to User, CASCADE |
+| `pharmacy` | FK to Pharmacy, **PROTECT** (a pharmacy with requests cannot be deleted, so request history is kept) |
+| `medicine` | FK to Medicine, **PROTECT** |
+| `quantity_requested` | positive integer, at least 1 (the form also caps it at 1000) |
+| `request_message`, `pharmacy_response` | optional text (forms cap them at 1000 characters) |
+| `status` | `PENDING` (default) / `CONFIRMED` / `UNAVAILABLE` / `CANCELLED`, indexed |
+| `created_at` (indexed), `updated_at` | timestamps |
+
+### Notification (`requests_app/models.py`)
+
+| Field | Type and rules |
+|---|---|
+| `user` | FK to User, CASCADE |
+| `message` | text |
+| `is_read` | default False, indexed |
+| `created_at` | indexed |
+
+## 3. Named indexes (15)
+
+An index is a lookup structure that makes filtering and sorting on those columns faster.
+
+| Model | Index | Columns |
+|---|---|---|
+| User | `user_role_joined_idx` | role, -date_joined |
+| Medicine | `med_cat_name_idx` | category, medicine_name |
+| Medicine | `med_dosage_cat_idx` | dosage_form, category |
+| Pharmacy | `pharm_appr_city_idx` | is_approved, city |
+| Pharmacy | `pharm_appr_pincode_idx` | is_approved, pincode |
+| Pharmacy | `pharm_appr_created_idx` | is_approved, -created_at |
+| Inventory | `inv_pharm_status_idx` | pharmacy, availability_status |
+| Inventory | `inv_pharm_updated_idx` | pharmacy, -updated_at |
+| Inventory | `inv_status_updated_idx` | availability_status, -updated_at |
+| AvailabilityRequest | `req_cust_status_idx` | customer, status |
+| AvailabilityRequest | `req_cust_created_idx` | customer, -created_at |
+| AvailabilityRequest | `req_pharm_status_idx` | pharmacy, status |
+| AvailabilityRequest | `req_pharm_created_idx` | pharmacy, -created_at |
+| Notification | `notif_user_read_idx` | user, is_read |
+| Notification | `notif_user_created_idx` | user, -created_at |
+
+Single columns marked "indexed" above have their own index as well (`db_index=True`).
+
+## 4. Transactions and race conditions
+
+- Registration of a pharmacy (user + pharmacy + notification) and of a customer (user + notification)
+  runs in one transaction (`transaction.atomic()`), so a failure saves nothing.
+- Approve/revoke locks the pharmacy row (`select_for_update()`).
+- Answering or cancelling a request uses a conditional `UPDATE … WHERE status='PENDING'`, so only the
+  first change wins.
+- Creating a request locks the customer row so two quick submits cannot both pass the duplicate and
+  rate-limit checks.
+
+## 5. Migrations (17)
+
+`accounts` 0001–0003, `inventory` 0001–0003, `medicines` 0001–0003, `pharmacies` 0001–0005,
+`requests_app` 0001–0003. Notable ones: `pharmacies.0003_pharmacy_approval_status` (adds the status and
+fills it from `is_approved`), `pharmacies.0004_…` (owner becomes one-to-one, coordinate validators),
+`pharmacies.0005_pharmacy_pincode_validator`, `medicines.0003_medicine_is_active_and_more` (archive flag
+and unique constraint), `requests_app.0003_availabilityrequest_protect_fks`.
+
+Apply them with `python manage.py migrate` (`build.sh` does this on deploy). Check that models and
+migrations match with `python manage.py makemigrations --check`.
+
+## 6. Rebuilding the local database
+
+`db.sqlite3` is ignored by git. To start clean, keep a backup instead of deleting it:
+
+```bash
+mv db.sqlite3 db.sqlite3.bak
+python manage.py migrate
+python manage.py seed_data      # needs DEBUG=True
+```
+
+Production backups are covered in [PRODUCTION_DEPLOYMENT_GUIDE.md](PRODUCTION_DEPLOYMENT_GUIDE.md).

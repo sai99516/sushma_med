@@ -1,130 +1,82 @@
-# Production Deployment Guide
-**MediFind – Phase 10: Step-by-Step Deployment Instructions**
+# Deployment (Render)
 
----
+**Purpose:** How to deploy MediFind to Render with the files in this repo, how to check it, and how to back up the data.
+**Who it is for:** Whoever puts the app online.
+**Last verified:** 2026-11-22 against commit `dd2f32c` (`render.yaml`, `build.sh`, `Procfile`, `config/settings.py`). Not yet deployed from this commit.
 
-## 1. Overview
+## 1. What is in the repo
 
-This guide provides end-to-end instructions for deploying MediFind to production. It covers:
-- **Part A**: Deployment to Render (Recommended PaaS).
-- **Part B**: Local Production Simulation on Windows (PowerShell).
-- **Part C**: Post-Deployment Operational Verification.
+| File | Job |
+|---|---|
+| `render.yaml` | Render "Blueprint": one free Python web service `medifind` and one free PostgreSQL database `medifind-postgres`, with environment variables |
+| `build.sh` | Runs on every deploy: `pip install -r requirements.txt`, `collectstatic --no-input`, `migrate --no-input` |
+| start command | `gunicorn config.wsgi:application` (in `render.yaml`; the `Procfile` has the same command for other hosts) |
+| `.env.production.example` | Every production variable with placeholders |
 
----
+## 2. Steps
 
-## 2. Part A: Deploying to Render (Recommended)
+1. Push the repo to GitHub (or GitLab) and create a **Blueprint** from it in the Render dashboard.
+2. Replace `medifind.onrender.com` with your real address in `ALLOWED_HOSTS` and `CSRF_TRUSTED_ORIGINS`
+   (`render.yaml` or the dashboard). Use exact values, no wildcards.
+3. `render.yaml` already sets: `DEBUG=False`, a generated `SECRET_KEY`, `DATABASE_URL` from the database,
+   `SECURE_SSL_REDIRECT=True`, `SECURE_HSTS_SECONDS=31536000`, `TRUSTED_PROXY_COUNT=1`,
+   `PYTHON_VERSION=3.11.9`, the SMTP `EMAIL_BACKEND`, `EMAIL_PORT=587` and `EMAIL_USE_TLS=True`.
+4. Fill in `EMAIL_HOST`, `EMAIL_HOST_USER`, `EMAIL_HOST_PASSWORD` and `DEFAULT_FROM_EMAIL` in the
+   dashboard (marked `sync: false`). Without them, password reset emails are not sent.
+5. Deploy. `build.sh` collects static files and applies all migrations.
+6. Create the first admin in the Render shell: `python manage.py createsuperuser`.
+   **Do not run `seed_data`** in production (it refuses when DEBUG is False anyway).
+7. Log in and open `/dashboard/admin-portal/`. A superuser counts as an app admin.
 
-### Step 1: Push Code to GitHub / Git Remote
-Ensure all project files, including [`render.yaml`](file:///c:/Users/yeshw/OneDrive/Desktop/medfind_project/render.yaml), [`build.sh`](file:///c:/Users/yeshw/OneDrive/Desktop/medfind_project/build.sh), and [`Procfile`](file:///c:/Users/yeshw/OneDrive/Desktop/medfind_project/Procfile), are committed and pushed to your GitHub repository.
+`TRUSTED_PROXY_COUNT=1` matters: without it every visitor appears to come from Render's proxy, and the
+login rate limit would block everyone after 5 failed logins.
+
+## 3. Production checklist
+
+| Check | Where it is set |
+|---|---|
+| `DEBUG=False` | `render.yaml` |
+| Real `SECRET_KEY` (app refuses to start without one) | `render.yaml` (`generateValue`) |
+| Exact `ALLOWED_HOSTS` and `CSRF_TRUSTED_ORIGINS` (https) | step 2 |
+| HTTPS redirect, HSTS, secure cookies, `X-Frame-Options: DENY` | automatic when DEBUG is False (`config/settings.py:184`) |
+| `TRUSTED_PROXY_COUNT=1` | `render.yaml` |
+| Email variables filled in | step 4 |
+| No demo data or demo logins | `seed_data` blocked; demo logins hidden when DEBUG is False |
+
+## 4. Test production settings on your own machine
 
 ```bash
-git add .
-git commit -m "Prepare MediFind for production deployment"
-git push origin main
-```
-
----
-
-### Step 2: Deploy via Render Blueprint (1-Click Setup)
-
-1. Log into your account at [https://dashboard.render.com](https://dashboard.render.com).
-2. Click **New +** in the top navigation bar and select **Blueprint**.
-3. Connect your GitHub repository (`medifind_project`).
-4. Render will detect the [`render.yaml`](file:///c:/Users/yeshw/OneDrive/Desktop/medfind_project/render.yaml) file in the root directory and propose creating two resources:
-   - **`medifind`** (Web Service running Python 3.11 with Gunicorn)
-   - **`medifind-postgres`** (Managed PostgreSQL Database)
-5. Click **Apply**.
-6. Render will automatically:
-   - Provision the PostgreSQL database and inject the `DATABASE_URL` environment variable.
-   - Run [`build.sh`](file:///c:/Users/yeshw/OneDrive/Desktop/medfind_project/build.sh) to install dependencies, compile static files with WhiteNoise, and apply migrations.
-   - Start Gunicorn using the start command: `gunicorn config.wsgi:application`.
-   - Issue a free Let's Encrypt SSL/TLS certificate for your `https://medifind.onrender.com` domain.
-
----
-
-### Step 3: Create Initial Production Admin Account
-
-Once the deployment shows **Live**, open the **Shell** tab in the Render web dashboard and create your administrator superuser:
-
-```bash
-python manage.py createsuperuser
-```
-
-Enter your production admin username, email, and a secure password.
-
----
-
-## 3. Part B: Local Production Simulation on Windows (PowerShell)
-
-Before deploying to the cloud, you can simulate production settings locally on Windows.
-
-### Step 1: Open Windows PowerShell
-
-Navigate to the project root directory:
-
-```powershell
-cd c:\Users\yeshw\OneDrive\Desktop\medfind_project
-```
-
-### Step 2: Set Production Environment Variables
-
-Run the following commands in PowerShell to simulate production mode:
-
-```powershell
-# Disable Debug Mode
-$env:DEBUG="False"
-
-# Generate and set a secure 50+ character SECRET_KEY
-$env:SECRET_KEY="c9f8v2m8xk2qwze1r4t7y0u3i6o9p2a5s8d1f4g7h0j3k6l9z8x7c6v5b4n3m9k"
-
-# Set allowed hosts and trusted origins for local testing
-$env:ALLOWED_HOSTS="localhost,127.0.0.1"
-$env:CSRF_TRUSTED_ORIGINS="http://localhost:8000,http://127.0.0.1:8000"
-
-# Disable SSL redirect for local HTTP testing
-$env:SECURE_SSL_REDIRECT="False"
-```
-
-### Step 3: Compile Static Assets with WhiteNoise
-
-```powershell
-python manage.py collectstatic --noinput
-```
-
-Output:
-```
-136 static files copied to 'c:\Users\yeshw\OneDrive\Desktop\medfind_project\staticfiles'.
-```
-
-### Step 4: Run Django Deployment Check
-
-```powershell
+export DEBUG=False SECRET_KEY="$(python -c 'import secrets; print(secrets.token_urlsafe(55))')"
+export ALLOWED_HOSTS=localhost,127.0.0.1 SECURE_SSL_REDIRECT=False USE_MANIFEST_STATIC=True
+python manage.py collectstatic --no-input
 python manage.py check --deploy
+gunicorn config.wsgi:application
 ```
 
-Expected output:
+`check --deploy` will warn about the SSL redirect because it is turned off here for plain `http://localhost`.
+Without `USE_MANIFEST_STATIC`, DEBUG=False also works locally without `collectstatic` (WhiteNoise serves
+files straight from `static/`).
+
+## 5. Backups
+
+The project has no backup script and no scheduled backup. Check what your Render database plan offers.
+Manual options:
+
+```bash
+# PostgreSQL (production): dump and restore with the standard tools
+pg_dump "$DATABASE_URL" -F c -f medifind_$(date +%Y%m%d).dump
+pg_restore -d "$DATABASE_URL" --clean --no-owner medifind_YYYYMMDD.dump
+
+# Any database, through Django (JSON)
+python manage.py dumpdata --natural-foreign --natural-primary -e contenttypes -e auth.Permission --indent 2 > backup.json
 ```
-System check identified no issues (0 silenced).
-```
 
-### Step 5: Start Local Server in Production Mode
+Locally, copy `db.sqlite3` while the server is stopped. To rebuild the local database, see
+[DATABASE_ARCHITECTURE.md](DATABASE_ARCHITECTURE.md).
 
-```powershell
-python manage.py runserver 127.0.0.1:8000
-```
+## 6. Known deployment limits
 
-Open `http://127.0.0.1:8000/` in your browser. Verify:
-- The site renders correctly with full CSS and images served by WhiteNoise.
-- Favicon displays in the browser tab.
-- Debug error pages are disabled (test by navigating to a non-existent URL like `/does-not-exist/` to verify the standard 404 response).
-
----
-
-## 4. Part C: Post-Deployment Operational Verification
-
-After deploying to Render:
-1. **Homepage Check**: Open `https://<your-service>.onrender.com/` and confirm the landing page loads over HTTPS with the green lock icon.
-2. **Branding Check**: Verify the MediFind icon displays in the browser tab and the navbar renders the logo.
-3. **Database Connectivity**: Log in with your admin credentials at `/accounts/login/` or `/admin/` to verify PostgreSQL reads and writes.
-4. **Search Verification**: Search for a medicine (e.g. `Paracetamol`) to verify query execution on PostgreSQL.
-5. **Static Assets**: Inspect browser DevTools (Network tab) and confirm `styles.css` and `favicon.svg` are served with `Cache-Control: max-age=31536000` (WhiteNoise immutable caching).
+- The login rate limit uses an in-memory cache, so with several Gunicorn workers or instances each one
+  counts separately.
+- `static/admin/js/admin/RelatedObjectLookups.js` overrides a Django admin file (a one-line browser fix
+  copied from newer Django). Delete it after upgrading Django to 6.x.

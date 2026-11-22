@@ -1,5 +1,9 @@
 # MediFind
 
+**Purpose:** Project overview, local setup, tests and deployment in short.
+**Who it is for:** Anyone opening the project for the first time.
+**Last verified:** 2026-11-22 against commit `dd2f32c`.
+
 MediFind is a Django web app that helps people find medicines at nearby pharmacies.
 
 - **Customers** search medicines by name, city, pincode or distance, see the
@@ -57,8 +61,14 @@ python manage.py seed_data
 ## Running the tests
 
 ```bash
-python manage.py test tests
+python manage.py test tests            # 160 unit/integration tests
+
+pip install -r requirements-dev.txt    # browser tests (68, Playwright + Chromium)
+python -m playwright install chromium
+python -m pytest e2e                   # builds its own temporary database
 ```
+
+Details: `docs/TESTING_REPORT.md`.
 
 ## Deploying to Render
 
@@ -84,6 +94,9 @@ See `.env.production.example` for every production variable.
 - In-app notifications only; no email/SMS notifications for requests.
 - No audit trail or rejection reason for approvals (only log lines).
 - The medicine detail page does not show distances.
-- Render's free PostgreSQL plan has no automatic backups.
-- Many files in `docs/` describe older versions of the code; see
-  `docs/README_DOCS_STATUS.md`.
+- The project has no backup script; check what your Render database plan offers.
+
+## Documentation
+
+Start at `docs/README.md` (reading order). The history of every review finding and fix is in
+`MEDIFIND_REVIEW.md`.

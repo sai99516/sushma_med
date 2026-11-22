@@ -1,65 +1,95 @@
-# Security Final Review & Vulnerability Audit
-**MediFind – Phase 9: Final Security Certification**
+# Security
 
----
+**Purpose:** The security controls in the code today, where they live, and the known gaps.
+**Who it is for:** Developers, reviewers and examiners asking "is it secure?".
+**Last verified:** 2026-11-22 against commit `dd2f32c`.
 
-## 1. Executive Summary
+No external penetration test has been done. The list below is what the code does, checked by reading
+it and by the tests named at the end. For the history of every finding and fix, see
+`MEDIFIND_REVIEW.md` ("Status of all findings" and later sections).
 
-A comprehensive application security audit was conducted across all six Django applications. The audit evaluated authentication workflows, role-based authorization, multi-tenant isolation, CSRF protection, input validation, SQL injection prevention, cross-site scripting (XSS) guards, and sensitive information exposure.
+## 1. Settings that fail safe (`config/settings.py`)
 
-**Result**: Zero high or critical security vulnerabilities detected. All endpoints adhere to defense-in-depth principles.
+| Setting | Behaviour |
+|---|---|
+| `DEBUG` | **False** unless the environment says `DEBUG=True` |
+| `SECRET_KEY` | Read from the environment. If it is missing and DEBUG is False, the app stops with `ImproperlyConfigured`. A fixed, clearly insecure key is used only when DEBUG is True |
+| `ALLOWED_HOSTS` | From the environment. Default: `localhost,127.0.0.1,[::1]` when DEBUG is True, **empty** otherwise. No `*` default |
+| `CSRF_TRUSTED_ORIGINS` | From the environment, default empty |
+| Always on | `SECURE_CONTENT_TYPE_NOSNIFF`, `SESSION_COOKIE_HTTPONLY`, `SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')` |
+| When DEBUG is False | `X_FRAME_OPTIONS = 'DENY'`, secure session and CSRF cookies, `SECURE_SSL_REDIRECT` (default True), HSTS (`SECURE_HSTS_SECONDS` default 31536000, include subdomains, preload) |
 
----
+`python manage.py check --deploy` with production-like settings reported no issues during the
+verification recorded in `MEDIFIND_REVIEW.md` ("Verification results").
 
-## 2. Threat Vector Assessment & Controls
+## 2. Accounts and login
 
-### 2.1 Authentication & Session Management
-- **Passwords**: Hashed using Django's default PBKDF2 with SHA-256 (work factor verified).
-- **Session Protection**:
-  - `SESSION_COOKIE_HTTPONLY = True` prevents client-side script access to session tokens.
-  - `SECURE_CONTENT_TYPE_NOSNIFF = True` prevents MIME-sniffing exploits.
-  - Next-URL validation uses `url_has_allowed_host_and_scheme()` to prevent open redirect attacks.
-  - Failed login attempts and security events are logged to the structured audit logger.
+- **Passwords** are hashed by Django's default PBKDF2-SHA256 hasher (1,000,000 iterations in Django 5.2).
+  Registration applies Django's four password validators and a minimum length of 8.
+- **Login rate limit** (`accounts/views.py:78-152`), using Django's cache:
+  - 5 failed logins for the same IP + username, or 20 failed logins from one IP (any username), block
+    further attempts with **HTTP 429** and "Too many failed login attempts".
+  - The counters expire 15 minutes (`LOGIN_RATE_LIMIT_WINDOW = 900` seconds) after the first failure.
+  - A successful login clears only the IP + username counter, so logging into your own account does not
+    reset the per-IP counter.
+  - Because the per-account counter includes the IP, a stranger cannot lock a user out from another IP.
+  - **Client IP:** `REMOTE_ADDR`, or, when `TRUSTED_PROXY_COUNT` is N > 0, the N-th entry from the right
+    of `X-Forwarded-For` (entries further left can be forged). Render needs `TRUSTED_PROXY_COUNT=1`.
+  - The default cache is in-memory, so the limit is **per server process**, not shared between
+    several workers or instances.
+- **Safe redirect after login:** `?next=` is followed only if `url_has_allowed_host_and_scheme()` accepts it.
+- **Logout is POST only** (`@require_POST`); a GET returns 405. The Sign Out button is a form with a CSRF token.
+- **Password reset** uses Django's built-in token views and sends email through the `EMAIL_*` settings
+  (console output locally).
 
-### 2.2 Role-Based Access Control (RBAC)
-- Custom decorators in `accounts/decorators.py`:
-  - `@admin_required`: restricts view execution to `user.role == 'ADMIN'` or `is_superuser`/`is_staff`.
-  - `@pharmacy_required`: restricts view execution to `user.role == 'PHARMACY'`.
-  - `@customer_required`: restricts view execution to `user.role == 'CUSTOMER'`.
-- Verified in automated test suites: Unauthorized role access returns redirects or HTTP 403 Forbidden.
+## 3. Access control
 
-### 2.3 Multi-Tenant Isolation
-- **Pharmacy Data Boundary**:
-  - Inventory items are queried with store scoping: `Inventory.objects.filter(pharmacy=pharmacy)`.
-  - Edit/Delete views enforce store ownership via `get_object_or_404(Inventory, pk=pk, pharmacy=pharmacy)`. Cross-store modification returns **HTTP 404 Not Found**.
-- **Customer Data Boundary**:
-  - Availability request cancellation verifies `get_object_or_404(AvailabilityRequest, pk=request_id, customer=customer)`.
-  - Notification mark-read endpoints verify `user=request.user`.
+Role decorators plus owner-scoped queries; see [ROLE_PERMISSION_MATRIX.md](ROLE_PERMISSION_MATRIX.md).
+Another user's inventory row, request or notification returns 404. `is_staff` alone does not give access
+to the app's admin portal.
 
-### 2.4 CSRF & Method Enforcement
-- State-mutating operations (`POST /pharmacies/manage/<pk>/toggle-approval/`, `POST /requests/<pk>/cancel/`, `POST /accounts/notifications/<pk>/read/`) enforce `@require_POST` and require CSRF tokens.
-- GET requests to mutating endpoints are rejected with **HTTP 405 Method Not Allowed**.
+## 4. Forms, CSRF and state changes
 
-### 2.5 Injection & Data Sanitization
-- **SQL Injection**: All database operations use parameterised Django ORM querysets and expressions (`Q()`, `aggregate()`, `Count()`). No raw SQL interpolation is used.
-- **XSS**: Django templates automatically escape all output context by default. JavaScript variables in templates are embedded using `json_script` filters.
-- **Input Validation**: Cleaned forms and validators (`MinValueValidator(0)` for stock, `MinValueValidator(1)` for inquiry quantities) strictly prevent negative and invalid numerical input.
+- Django's CSRF middleware is on; POST forms carry `{% csrf_token %}`.
+- Actions that change data accept POST only: logout, mark notification(s) read, cancel request,
+  approve/revoke. Inventory delete shows a confirm page on GET and deletes only on POST.
+- Input limits: request quantity 1–1000, request and response messages up to 1000 characters,
+  6-digit pincode, phone 7–15 digits, latitude/longitude ranges, stock quantity not negative.
+- Abuse limits on requests: no duplicate pending request, at most 10 requests per customer per hour.
 
-### 2.6 Sensitive Information Exposure
-- Public endpoints never expose user password hashes, emails, or personal phone numbers.
-- Unapproved pharmacies are completely excluded from public search and pharmacy discovery views.
+## 5. Injection and XSS
 
----
+- **SQL injection:** all queries use the Django ORM; there is no raw SQL in the app code.
+- **XSS** (cross-site scripting: getting the browser to run attacker-written script):
+  - Django templates escape variables by default; no template uses `|safe` or `mark_safe`.
+  - Data for JavaScript is passed with `json_script`.
+  - Map popups are built from DOM nodes with `textContent` (`buildPopup()` in `static/js/map_popup.js`),
+    so a pharmacy name like `<img src=x onerror=…>` is shown as text. Popup links allow only `tel:`, `/`
+    and `https://`. "Pin on Map" buttons read `data-*` attributes instead of inline JavaScript strings.
+  - `innerHTML` is used only for fixed geolocation status messages written in the template.
+- CDN files (Bootstrap, Bootstrap Icons, Leaflet, Chart.js) are pinned to exact versions with SRI hashes.
 
-## 3. Compliance Matrix
+## 6. Data exposure
 
-| Security Domain | Status | Verification Method |
-|-----------------|:------:|---------------------|
-| Authentication & Session Security | COMPLIANT | `tests.test_security`, `tests.test_auth_profile` |
-| Role-Based Authorization | COMPLIANT | `tests.test_admin_portal`, `tests.test_e2e_workflows` |
-| Multi-Tenant Pharmacy Isolation | COMPLIANT | `tests.test_pharmacy_dashboard`, `tests.test_e2e_workflows` |
-| Multi-Tenant Customer Ownership | COMPLIANT | `tests.test_customer_dashboard`, `tests.test_e2e_workflows` |
-| CSRF & HTTP Method Guards | COMPLIANT | `tests.test_security`, `tests.test_admin_portal` |
-| SQL Injection Prevention | COMPLIANT | ORM parameterized queries across all services |
-| Template XSS Prevention | COMPLIANT | Auto-escaping enabled, `json_script` tags verified |
-| Non-Destructive Migrations | COMPLIANT | `python manage.py makemigrations --check --dry-run` |
+- Demo logins are shown only when DEBUG is True, and `seed_data` refuses to run when DEBUG is False
+  (it creates `admin/admin123`).
+- The pharmacy licence number is shown only to the owner and admins, and is not searchable publicly.
+- Pages for non-approved pharmacies are hidden from the public.
+- Users see generic error messages; details go to the server log with `logger.exception`.
+  The registration log line has the username and id, not the email.
+
+## 7. Known gaps (honest list)
+
+- The login rate limit is per process (local-memory cache).
+- No Content-Security-Policy header, no two-factor login.
+- No stored audit trail for approvals and no rejection reason (only log lines and notifications).
+- Admins can send availability requests (they pass the customer check by design).
+- Deleting a stock row leaves that medicine's pending requests open.
+- Stock data is self-reported and cannot be verified by the app.
+
+## 8. Tests that cover security
+
+`tests/test_security.py` (role access, tenant isolation, GET rejected on POST-only URLs, weak passwords,
+logout), `tests/test_xss_map_popups.py`, `tests/test_demo_logins.py`, `tests/test_regressions_pass3.py`
+(rate limiter and proxy IP), and the browser tests in `e2e/test_security.py` (stored XSS on the 4 map pages, the home
+page and the admin pending pages; 12 direct-URL cases, cross-pharmacy 404s, GET logout 405). How to run them: [TESTING_REPORT.md](TESTING_REPORT.md).
