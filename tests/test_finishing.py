@@ -201,3 +201,23 @@ class DeleteStockCancelsRequestsTests(TestCase):
         self.assertEqual(answered.status, 'CONFIRMED')
         self.assertEqual(other.status, 'PENDING')
         self.assertTrue(Notification.objects.filter(user=cust, message__contains='no longer lists').exists())
+
+
+class OnlyCustomersSendRequestsTests(TestCase):
+    """F7: admins pass @customer_required, but they must not send availability requests."""
+
+    def test_admin_cannot_open_or_post_request_form(self):
+        from accounts.models import User
+        from django.urls import reverse
+        from inventory.models import Inventory
+        from medicines.models import Medicine
+        from requests_app.models import AvailabilityRequest
+        med = Medicine.objects.create(medicine_name='Dolo 650', generic_name='Paracetamol', strength='650mg')
+        pharmacy = _pharmacy('rq', 'Request Pharmacy', 17.4, 78.4)
+        Inventory.objects.create(pharmacy=pharmacy, medicine=med, quantity=5)
+        User.objects.create_user(username='boss', email='b@t.test', password='x', role='ADMIN')
+        self.client.login(username='boss', password='x')
+        url = reverse('create_request', args=[pharmacy.pk, med.pk])
+        self.assertRedirects(self.client.get(url), reverse('dashboard'), fetch_redirect_response=False)
+        self.client.post(url, {'quantity_requested': 1})
+        self.assertFalse(AvailabilityRequest.objects.exists())

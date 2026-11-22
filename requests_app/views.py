@@ -24,6 +24,10 @@ logger = logging.getLogger('medfind')
 @customer_required
 def create_request_view(request, pharmacy_id, medicine_id):
     """Submits a customer availability inquiry to an approved pharmacy."""
+    # F7: admins may view customer pages, but only customers send requests.
+    if not request.user.is_customer:
+        messages.error(request, "Only customer accounts can send availability requests.")
+        return redirect('dashboard')
     pharmacy = get_object_or_404(Pharmacy.objects.select_related('owner'), pk=pharmacy_id, is_approved=True)
     medicine = get_object_or_404(Medicine, pk=medicine_id, is_active=True)
 
