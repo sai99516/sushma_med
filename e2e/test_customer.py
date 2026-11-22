@@ -62,12 +62,20 @@ def test_request_availability_valid_duplicate_and_bad_quantities(page):
     _submit(page, 1)
     expect(page.locator(".alert-danger.alert-dismissible")).to_contain_text("already have a pending request")
 
-    # quantity 0 is rejected (the rendered input has min="0", so the server does the check)
+    # quantity 0 and 1001: blocked by the browser (min=1, max=1000, review E2) ...
     _open_request_form(page, p)
+    for bad in ("0", "1001"):
+        page.locator("#id_quantity_requested").fill(bad)
+        page.locator("main form button[type=submit]").click()
+        assert re.search(r"/requests/create/", page.url)
+        assert page.locator("#id_quantity_requested").evaluate("el => el.validationMessage"), bad
+    # ... and by the server when the browser check is bypassed
+    page.locator("main form").evaluate("f => f.noValidate = true")
     _submit(page, 0)
     expect(page.locator("main form")).to_contain_text("at least 1 unit")
 
-    # quantity 1001 is rejected by the server
+    # quantity 1001 is rejected by the server (the re-rendered form validates again)
+    page.locator("main form").evaluate("f => f.noValidate = true")
     _submit(page, 1001)
     expect(page.locator("main form")).to_contain_text("at most 1000 units")
     assert AvailabilityRequest.objects.filter(customer=cust).count() == 1

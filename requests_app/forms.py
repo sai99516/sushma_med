@@ -16,10 +16,9 @@ class AvailabilityRequestCreateForm(forms.ModelForm):
         model = AvailabilityRequest
         fields = ['quantity_requested', 'request_message']
         widgets = {
+            # min/max are set in __init__; the initial value 1 comes from the model default.
             'quantity_requested': forms.NumberInput(attrs={
                 'class': 'form-control',
-                'min': '1',
-                'value': '1',
                 'placeholder': 'Number of units needed'
             }),
             'request_message': forms.Textarea(attrs={
@@ -28,6 +27,11 @@ class AvailabilityRequestCreateForm(forms.ModelForm):
                 'placeholder': 'Optional note (e.g., urgency, when you plan to pick it up, specific brand requirement)'
             }),
         }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Review E2: PositiveIntegerField renders min="0"; let the browser enforce 1..MAX too.
+        self.fields['quantity_requested'].widget.attrs.update({'min': '1', 'max': str(MAX_REQUEST_QUANTITY)})
 
     def clean_quantity_requested(self):
         qty = self.cleaned_data.get('quantity_requested')
