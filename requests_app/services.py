@@ -2,6 +2,7 @@ import logging
 from datetime import timedelta
 from typing import Any, Dict, Optional, Tuple
 from django.conf import settings
+from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.db.models import Count, Q, QuerySet
@@ -43,7 +44,7 @@ def create_availability_inquiry(
             raise ValidationError("This pharmacy does not list this medicine, so it cannot be requested here.")
 
         # Lock the customer row so two parallel submits cannot both pass the checks below.
-        type(customer).objects.select_for_update().filter(pk=customer.pk).first()
+        get_user_model().objects.select_for_update().filter(pk=customer.pk).first()
 
         if AvailabilityRequest.objects.filter(
             customer=customer, pharmacy=pharmacy, medicine=medicine, status='PENDING'

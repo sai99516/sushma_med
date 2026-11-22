@@ -341,3 +341,32 @@ Pre-checks on the current `db.sqlite3` (read-only): no duplicate medicines (N28)
 | docs: medicine detail distances | Skipped | Not a tiny change. |
 | docs: approval audit trail / rejection reason | Open | Only log lines and owner notifications; no stored history or reason. |
 | docs: outdated docs | Open | Listed in `docs/README_DOCS_STATUS.md`; no file in `docs/` was edited or deleted. |
+
+## Verification results
+
+Verification on branch `fix/all` (2026-11-22). No new features were added.
+
+**Test suite (`python manage.py test tests`)**
+
+| Run | Tests | Result |
+|---|---|---|
+| First full run (after the fix phases) | 144 | 142 passed, **2 errors** |
+| Final full run (after the fix below + 6 new regression tests) | 150 | **150 passed** |
+
+**Failures found and how they were fixed**
+- `test_e2e_workflows.test_02_customer_full_workflow` and `test_features.test_availability_request_workflow` raised `AttributeError: type object 'SimpleLazyObject' has no attribute 'objects'`. **The code was wrong, not the test.** `create_availability_inquiry` locked the customer row with `type(customer).objects`, but in a view `request.user` is a `SimpleLazyObject`, so **every request sent through the website returned HTTP 500** (bug added in Phase 2, N9). Fixed with `get_user_model().objects.select_for_update()` in `requests_app/services.py`. Both tests then passed. No test needed changing.
+
+**New regression tests** (`tests/test_regressions_fix_all.py`): N3 (a second answer is blocked), N4 (a cancelled request cannot be overwritten by a response), N5 (approving twice keeps the pharmacy approved), known #3 (search order In Stock → Low → Out), N10 (digits in the city box become the pincode filter), N9 (a duplicate PENDING request is blocked in the service and in the view). All pass.
+
+**Smoke test (fresh DB copy, real dev server, DEBUG=True)**
+- The scratch copy of the database was deleted and rebuilt with `migrate` + `seed_data` (6 pharmacies: 5 approved, 1 pending; 69 stock rows). The project's `db.sqlite3` was not touched.
+- The demo script was walked over HTTP against `runserver`, with cookies and CSRF tokens: a visitor searches "Dolo"; the admin logs in and approves the pending pharmacy; logout by POST; `pending_owner` adds Dolo 650 with 25 units; `customer1` searches (Metro Life now appears) and sends a request; the pharmacy confirms, and opening the respond page again redirects (answered once); the customer sees "Confirmed".
+- **30/30 steps returned the expected status, and there were no 500 responses or tracebacks in the server log.** Also checked: pharmacy detail 200, medicine detail 200, GET `/accounts/logout/` 405, static JS 200.
+
+**Production-like start (`DEBUG=False`, 80-character SECRET_KEY, ALLOWED_HOSTS and CSRF_TRUSTED_ORIGINS set, `USE_MANIFEST_STATIC=True`)**
+- `python manage.py check --deploy`: **no issues (0 warnings)**.
+- `collectstatic --no-input`: 128 files copied, 412 post-processed (manifest + compression).
+- gunicorn started; with Host `medifind.onrender.com` and `X-Forwarded-Proto: https`: `/`, search, `/pharmacies/` and login returned 200 with hashed static URLs and no demo logins; plain HTTP returned 301 to HTTPS; an unknown Host returned 400.
+- Without `SECRET_KEY` (DEBUG=False), the app stops with the clear `ImproperlyConfigured` message. `seed_data` with DEBUG=False stops with a `CommandError`.
+
+**Still open after verification:** the same items as in "Status of all findings" (approval audit trail/rejection reason, medicine-detail distances, outdated `docs/`, N25 by decision). The login rate limit is per process (local-memory cache).
