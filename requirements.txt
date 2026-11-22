@@ -1,7 +1,9 @@
-Django>=5.2,<6.0
-Pillow>=10.0.0
-python-dotenv>=1.0.0
-gunicorn>=21.0.0
-whitenoise>=6.5.0
-dj-database-url>=2.1.0
-psycopg2-binary>=2.9.0
+# Pinned to the versions installed in the project venv (Python 3.11).
+Django==5.2.19
+asgiref==3.13.0
+sqlparse==0.6.1
+python-dotenv==1.2.4
+gunicorn==27.0.1
+whitenoise==6.12.0
+dj-database-url==3.1.2
+psycopg2-binary==2.9.13

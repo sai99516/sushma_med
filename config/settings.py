@@ -195,11 +195,21 @@ else:
     CSRF_COOKIE_SECURE = False
     SECURE_SSL_REDIRECT = False
 
-# Email Configuration
+# Email Configuration (review N6): every setting is read from the environment.
+# Locally the console backend prints emails; in production set an SMTP backend.
 EMAIL_BACKEND = os.environ.get(
     'EMAIL_BACKEND',
     'django.core.mail.backends.console.EmailBackend'
 )
+EMAIL_HOST = os.environ.get('EMAIL_HOST', 'localhost')
+EMAIL_PORT = int(os.environ.get('EMAIL_PORT', '587'))
+EMAIL_USE_TLS = env_bool('EMAIL_USE_TLS', True)
+EMAIL_USE_SSL = env_bool('EMAIL_USE_SSL', False)
+EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER', '')
+EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD', '')
+EMAIL_TIMEOUT = int(os.environ.get('EMAIL_TIMEOUT', '10'))
+DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', 'MediFind <noreply@localhost>')
+SERVER_EMAIL = os.environ.get('SERVER_EMAIL', DEFAULT_FROM_EMAIL)
 
 # Login rate limiting (review known #6): simple cache-based counter,
 # no extra dependency. After LOGIN_RATE_LIMIT_ATTEMPTS failed logins for the
