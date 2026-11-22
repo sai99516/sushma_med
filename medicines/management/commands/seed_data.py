@@ -140,7 +140,7 @@ class Command(BaseCommand):
                     'owner_username': 'pending_owner',
                     'email': 'pending@medifind.test',
                     'phone': '+91 9111100006',
-                    'name': '[DEMO] Metro Life Pharmacy (Pending Review)',
+                    'name': '[DEMO] Metro Life Pharmacy',
                     'reg_no': 'DEMO-HYD-ML-106',
                     'address': 'Station Road, Secunderabad',
                     'city': 'Hyderabad',
