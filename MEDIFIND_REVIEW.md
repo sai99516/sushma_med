@@ -370,3 +370,37 @@ Verification on branch `fix/all` (2026-11-22). No new features were added.
 - Without `SECRET_KEY` (DEBUG=False), the app stops with the clear `ImproperlyConfigured` message. `seed_data` with DEBUG=False stops with a `CommandError`.
 
 **Still open after verification:** the same items as in "Status of all findings" (approval audit trail/rejection reason, medicine-detail distances, outdated `docs/`, N25 by decision). The login rate limit is per process (local-memory cache).
+
+## Third pass findings and fixes
+
+Third pass on branch `fix/pass3` (from `main`, 2026-11-22). Only new issues are listed; nothing from the sections above is repeated.
+
+**How it was checked**
+- **Runtime crawl** on a seeded **copy** of the database (the project's `db.sqlite3` was not touched). The Django test client logged in as anonymous, `customer1`, `apollo_owner`, `pending_owner` and `admin`, and sent GET requests to 92 URLs per role (every route in every `urls.py`). For URLs with ids it used real ids, a non-existing id (999999), and rows that belong to another user. Query-string edge cases were covered too: page=0/abc/99999, invalid sort and status, negative or huge radius, radius without coordinates, lat=999, `nan`/`inf`, quotes, `%`, `_`, emoji. Templates were rendered with `string_if_invalid` so undefined variables would show up. Each page was checked for undefined variables, "None"/"Decimal(" shown as text, duplicate HTML ids, POST forms without `csrf_token`, and internal links that do not resolve. Every `{% static %}` path was checked to exist.
+- **POST fuzzing:** 1,407 POSTs to every form endpoint. Inputs: empty data, each field missing, empty or whitespace-only values, 10,000-character strings, emoji/unicode, `\x00`, quotes/SQL text, `<script>`, 0, -1, 10, 11, 999999999, 20-digit numbers, `abc`, `1e309`, `nan`, lat/lng 450/-200. Also: marking another user's notification as read, duplicate usernames/emails that differ only by case, a 200-character username, an emoji pincode.
+- **Code review** of the fix-phase code: approval status sync, revoke flow, re-approval, atomic blocks, PROTECT, migrations, the rate limiter, notifications, search/pagination, inventory boundaries (0/10/11, exactly 24h/48h), dashboards and charts with empty data, map JavaScript (0 pins, missing map element, geolocation errors), and the settings/`build.sh`/`render.yaml`/WhiteNoise setup.
+
+**Crawl result:** no 500 errors, no template errors, and no leaks of another user's data. Every page that belongs to another user returned 404, and an unapproved pharmacy redirected for the public. All 1,407 POSTs ran without a 500. Marking another user's notification returned 404 and left it unread. Case-only duplicate usernames and emails were rejected.
+
+| ID | Severity | Where | What was wrong | Found by | Status | Commit |
+|---|---|---|---|---|---|---|
+| P1 | Medium | `accounts/views.py:78` (`_client_ip`), `config/settings.py` (`TRUSTED_PROXY_COUNT`), `render.yaml:38` | The login rate limiter used `REMOTE_ADDR`. Behind Render's proxy every visitor has the proxy's IP, so 5 failed logins by anyone would block **all** logins for 15 minutes. | code | Fixed: the client IP comes from the right-most trusted `X-Forwarded-For` entry when `TRUSTED_PROXY_COUNT > 0` (set to 1 in `render.yaml`). | `ae54334` |
+| P2 | Medium | `accounts/views.py:93` (`_login_rate_keys`) | The per-username counter allowed a targeted lockout: anyone could lock a user out from any IP with 5 wrong passwords for that username. | code | Fixed: the account counter is keyed by IP + username (5 attempts), plus a per-IP counter (20 attempts, any username). Trade-off: password guessing spread across many IPs is limited only per IP. | `ae54334` |
+| P3 | Low | `accounts/views.py:141` | A successful login deleted both counters, so an attacker could reset the per-IP counter by logging into their own account between guesses. | code | Fixed: success clears only the IP + username counter. | `ae54334` |
+| P4 | Low | `requests_app/forms.py:5` | No upper limit on request quantity (999999999 accepted) or on request/response message length (10,000 characters accepted and stored). | crawl (fuzz) | Fixed: quantity ≤ 1000; message and pharmacy response ≤ 1000 characters. | `9f69710` |
+| P5 | Low | `accounts/validators.py:29`, `pharmacies/models.py:40` | Pincode accepted any text, e.g. `😀abc`, in all 3 pharmacy forms. Pincode search uses an exact match, so such a pharmacy can never be found by pincode. | crawl (fuzz) | Fixed: 6-digit Indian PIN validator (migration `pharmacies.0005`, validators only, no data change). Existing rows are not changed; an owner with an invalid pincode must correct it on the next profile save. | `9f69710` |
+| P6 | Low | `accounts/views.py:26`, `templates/accounts/profile.html` | The pharmacy owner's profile page had two elements with `id="id_phone_number"` (user form and pharmacy form). | crawl (HTML check) | Fixed: the pharmacy form uses `id_pharmacy_*` ids (field names unchanged). | `ae54334` |
+| P7 | Low | `pharmacies/services.py:127` (`paginate`) | `?page=0` showed the **last** page on search, discovery and pharmacy detail. | crawl | Fixed: page < 1 shows page 1. The other list views (inventory, inbox, notifications, admin lists) keep Django's default (last page); cosmetic. | `9f69710` |
+| P8 | Low | `dashboard/services.py:99` | The pharmacy dashboard "catalogue medicines" count included archived medicines, which the add-stock form does not offer. | code | Fixed: counts active medicines only. | `9f69710` |
+| P9 | Low | `render.yaml:14` | Used the deprecated `env: python` key. | code | Fixed: `runtime: python`. Check it on the first Render deploy. | `ae54334` |
+| P10 | Low | `accounts/views.py:162` | An anonymous POST to logout showed "You have been logged out safely." | crawl (fuzz) | Fixed: the message is shown only when a user was logged in. | `ae54334` |
+| P11 | Low | `accounts/decorators.py` (`customer_required`), `requests_app/views.py:25` | Admins can open the request form and send availability requests to pharmacies. | crawl | Skipped: admins are allowed on customer pages by design (see N16 status); changing this affects several views. | – |
+| P12 | Low | `inventory/services.py:95` (`delete_inventory_item`) | Deleting a stock row leaves that medicine's PENDING requests open; the pharmacy can still answer them. | code | Skipped: a behaviour choice, not a crash; auto-cancelling would be a new feature. | – |
+
+Regression tests: `tests/test_regressions_pass3.py` (8 tests, P1–P8). All 8 fail on the code before the fix and pass after it.
+
+Checked and found OK (no change needed): password reset does not crash when SMTP is missing or misconfigured (Django 5.2 catches and logs the error; `EMAIL_TIMEOUT=10`); charts with empty data; maps with 0 pins or no map element; inventory status at 0/10/11 and freshness at exactly 24h/48h; archived medicines rejected by the add-stock form; approval sync for old rows; `build.sh` runs `collectstatic` and `migrate`; gunicorn picks up Render's `$PORT`; `check --deploy` gives no warnings; `collectstatic` works with the manifest storage.
+
+**Test suite:** 150 → 158 tests, **158 passed**, no failures in the full run. `makemigrations --check`: no changes.
+
+**New migration to run on Render:** `pharmacies.0005_pharmacy_pincode_validator` (`build.sh` runs `migrate`). **New env var:** `TRUSTED_PROXY_COUNT=1` (already in `render.yaml` and `.env.production.example`).
