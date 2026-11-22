@@ -167,19 +167,39 @@ def get_search_filter_options() -> Tuple[List[str], List[str], List[str]]:
     return categories, cities, dosage_forms
 
 
-def get_medicine_detail_data(medicine_id: int):
+def get_medicine_detail_data(medicine_id: int, user_lat: Optional[Any] = None, user_lng: Optional[Any] = None,
+                             sort_by: str = ''):
     """
-    Retrieves medicine details, approved pharmacy inventory, and map pins.
+    Retrieves medicine details, approved pharmacy stock and map pins.
+    With a valid user location (F3) each row gets distance_km, and sort_by='distance'
+    puts the nearest pharmacy first. Returns (medicine, stock_records, map_pins, user_coords).
     """
     medicine = get_object_or_404(Medicine, pk=medicine_id, is_active=True)
-    stock_records = Inventory.objects.filter(
+    stock_qs = Inventory.objects.filter(
         medicine=medicine,
         pharmacy__is_approved=True
-    ).select_related('pharmacy').annotate(stock_rank=STOCK_RANK).order_by('stock_rank', '-updated_at')
+    ).select_related('pharmacy').annotate(stock_rank=STOCK_RANK)
 
+    user_coords: Optional[Dict[str, float]] = None
+    if is_valid_coordinate(user_lat, user_lng):
+        user_coords = {'lat': float(user_lat), 'lng': float(user_lng)}
+    if user_coords and sort_by == 'distance':
+        stock_qs = stock_qs.annotate(
+            distance_db=haversine_expression('pharmacy__latitude', 'pharmacy__longitude',
+                                             user_coords['lat'], user_coords['lng'])
+        ).order_by(F('distance_db').asc(nulls_last=True), 'stock_rank', '-updated_at')
+    else:
+        stock_qs = stock_qs.order_by('stock_rank', '-updated_at')
+
+    stock_records = list(stock_qs)  # a list, so distance_km set below survives template iteration
     map_pins = []
     for item in stock_records:
         p = item.pharmacy
+        item.distance_km = None
+        if user_coords:
+            item.distance_km = calculate_haversine_distance(
+                user_coords['lat'], user_coords['lng'], p.latitude, p.longitude
+            )
         if is_valid_coordinate(p.latitude, p.longitude):  # review N8: keeps 0.0
             map_pins.append({
                 'id': p.id,
@@ -190,6 +210,7 @@ def get_medicine_detail_data(medicine_id: int):
                 'lng': float(p.longitude),
                 'medicine': medicine.medicine_name,
                 'status': item.get_availability_status_display(),
+                'distance_km': item.distance_km,
             })
 
-    return medicine, stock_records, map_pins
+    return medicine, stock_records, map_pins, user_coords

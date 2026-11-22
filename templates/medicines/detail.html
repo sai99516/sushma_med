@@ -68,6 +68,24 @@
       </h4>
 
       {% if stock_records %}
+      <!-- Distance from the user's location (F3) -->
+      <div class="d-flex flex-wrap align-items-center gap-2 mb-3 small" id="detailLocationBar">
+        {% if has_user_coords %}
+          <span class="text-success"><i class="bi bi-geo-alt-fill me-1"></i>Distances from your location (straight line)</span>
+          {% if sort_by == 'distance' %}
+            <a href="?lat={{ user_coords.lat }}&amp;lng={{ user_coords.lng }}" class="btn btn-sm btn-outline-secondary rounded-pill">Sort by stock</a>
+          {% else %}
+            <a href="?lat={{ user_coords.lat }}&amp;lng={{ user_coords.lng }}&amp;sort=distance" class="btn btn-sm btn-outline-primary rounded-pill">Nearest first</a>
+          {% endif %}
+          <a href="{% url 'medicine_detail' medicine.id %}" class="btn btn-sm btn-link text-muted">Clear location</a>
+        {% else %}
+          <button type="button" class="btn btn-sm btn-outline-primary rounded-pill" id="btnDetailLocate">
+            <i class="bi bi-crosshair me-1"></i>Use my location
+          </button>
+          <span id="detailGeoFeedback" class="text-muted"></span>
+        {% endif %}
+      </div>
+
       <div class="d-flex flex-column gap-3 mb-4">
         {% for item in stock_records %}
         <div class="p-3 border rounded-3 bg-light-subtle">
@@ -85,6 +103,13 @@
               <p class="small text-muted mb-2">
                 <i class="bi bi-telephone me-1 text-success"></i> {{ item.pharmacy.phone_number }}
               </p>
+              {% if item.distance_km is not None %}
+              <p class="small mb-2">
+                <span class="badge bg-info-subtle text-info-emphasis border border-info-subtle">
+                  <i class="bi bi-signpost-split me-1"></i>{{ item.distance_km }} km away
+                </span>
+              </p>
+              {% endif %}
               <div class="d-flex flex-wrap align-items-center gap-2 mt-2">
                 {% if item.availability_status == 'IN_STOCK' %}
                 <span class="badge-in-stock">Reported In Stock ({{ item.quantity }} units)</span>
@@ -150,8 +175,40 @@
 {% endblock %}
 
 {% block extra_js %}
+<script>
+  // F3: ask the browser for the user's location, then reload with lat/lng and sort=distance.
+  document.addEventListener('DOMContentLoaded', function () {
+    const btn = document.getElementById('btnDetailLocate');
+    const feedback = document.getElementById('detailGeoFeedback');
+    if (!btn) return;
+    btn.addEventListener('click', function () {
+      if (!navigator.geolocation) {
+        feedback.textContent = 'Location is not supported by your browser.';
+        return;
+      }
+      feedback.textContent = 'Detecting your location...';
+      navigator.geolocation.getCurrentPosition(
+        function (pos) {
+          const params = new URLSearchParams({
+            lat: pos.coords.latitude.toFixed(6),
+            lng: pos.coords.longitude.toFixed(6),
+            sort: 'distance'
+          });
+          window.location.search = params.toString();
+        },
+        function (error) {
+          feedback.textContent = error.code === 1
+            ? 'Location permission denied. The list stays sorted by stock.'
+            : 'Could not get your location. The list stays sorted by stock.';
+        },
+        { timeout: 10000, enableHighAccuracy: true }
+      );
+    });
+  });
+</script>
 {% if map_pins %}
 {{ map_pins|json_script:"detail-pins-data" }}
+{{ user_coords|json_script:"detail-user-coords" }}
 <script>
   document.addEventListener('DOMContentLoaded', function () {
     const pinsData = JSON.parse(document.getElementById('detail-pins-data').textContent || '[]');
@@ -168,10 +225,17 @@
       marker.bindPopup(buildPopup([
         { text: p.name, tag: 'strong', style: 'display: block;' },
         { text: p.address },
-        { text: p.status, tag: 'strong', style: 'display: block;' }
+        { text: p.status, tag: 'strong', style: 'display: block;' },
+        { text: p.distance_km !== null && p.distance_km !== undefined ? p.distance_km + ' km away' : '' }
       ], 'min-width: 160px;'));
       bounds.push([p.lat, p.lng]);
     });
+    const userCoords = JSON.parse(document.getElementById('detail-user-coords').textContent || 'null');
+    if (userCoords) {
+      L.circleMarker([userCoords.lat, userCoords.lng], { radius: 8, color: '#0369A1', fillOpacity: 0.8 })
+        .addTo(map).bindPopup(buildPopup([{ text: 'Your location', tag: 'strong' }]));
+      bounds.push([userCoords.lat, userCoords.lng]);
+    }
     map.fitBounds(bounds, { padding: [30, 30] });
   });
 </script>

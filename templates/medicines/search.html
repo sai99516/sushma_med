@@ -189,7 +189,7 @@
                     </div>
 
                     <h5 class="fw-bold text-dark mb-1">
-                      <a href="{% url 'medicine_detail' item.medicine.id %}" class="text-dark text-decoration-none">
+                      <a href="{% url 'medicine_detail' item.medicine.id %}{% if user_coords %}?lat={{ user_coords.lat }}&amp;lng={{ user_coords.lng }}&amp;sort=distance{% endif %}" class="text-dark text-decoration-none">
                         {{ item.medicine.medicine_name }}
                       </a>
                     </h5>

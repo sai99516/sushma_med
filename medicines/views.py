@@ -81,12 +81,21 @@ def search_medicines_view(request):
 
 def medicine_detail_view(request, pk):
     """Public view showing medicine specifications and verified pharmacy stock availability."""
-    medicine, stock_records, map_pins = get_medicine_detail_data(pk)
+    sort_by = request.GET.get('sort', '').strip()
+    medicine, stock_records, map_pins, user_coords = get_medicine_detail_data(
+        pk,
+        user_lat=request.GET.get('lat', '').strip(),
+        user_lng=request.GET.get('lng', '').strip(),
+        sort_by=sort_by,
+    )
 
     context = {
         'medicine': medicine,
         'stock_records': stock_records,
         'map_pins': map_pins,
+        'user_coords': user_coords,
+        'has_user_coords': user_coords is not None,
+        'sort_by': sort_by if user_coords else '',
     }
     return render(request, 'medicines/detail.html', context)
 
