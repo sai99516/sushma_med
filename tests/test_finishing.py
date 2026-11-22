@@ -221,3 +221,19 @@ class OnlyCustomersSendRequestsTests(TestCase):
         self.assertRedirects(self.client.get(url), reverse('dashboard'), fetch_redirect_response=False)
         self.client.post(url, {'quantity_requested': 1})
         self.assertFalse(AvailabilityRequest.objects.exists())
+
+
+class ErrorPageTests(TestCase):
+    """F8: custom 404 and 500 pages (used when DEBUG is False)."""
+
+    def test_404_page(self):
+        resp = self.client.get('/no-such-page/')
+        self.assertEqual(resp.status_code, 404)
+        self.assertContains(resp, 'Page not found', status_code=404)
+        self.assertContains(resp, 'href="/medicines/search/"', status_code=404)
+
+    def test_500_template_renders_without_request(self):
+        from django.template.loader import render_to_string
+        html = render_to_string('500.html')
+        self.assertIn('Something went wrong', html)
+        self.assertNotIn('{%', html)
