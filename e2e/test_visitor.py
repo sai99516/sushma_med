@@ -249,6 +249,23 @@ def test_medicine_detail_and_map(page):
     expect(page.locator("a:has-text('Login to Request')").first).to_be_visible()
 
 
+
+def test_medicine_detail_use_my_location(new_context):
+    """F3: 'Use my location' on the medicine page adds distances and sorts nearest first."""
+    ctx = new_context(geolocation={"latitude": 17.4156, "longitude": 78.4347}, permissions=["geolocation"])
+    page = ctx.new_page()
+    page.goto(f"/medicines/{medicine_id('Dolo 650')}/")
+    page.locator("#btnDetailLocate").click()
+    page.wait_for_url(re.compile(r"sort=distance"))
+    badges = page.locator("main .badge:has(.bi-signpost-split)")
+    expect(badges.first).to_be_visible()
+    km = [float(re.search(r"[\d.]+", t).group()) for t in badges.all_inner_texts()]
+    assert len(km) >= 5 and km == sorted(km)
+    expect(page.get_by_text("Distances from your location")).to_be_visible()
+    page.get_by_role("link", name="Clear location").click()
+    expect(page.locator("#btnDetailLocate")).to_be_visible()
+
+
 def test_pharmacy_directory_map_and_detail(page):
     from pharmacies.models import Pharmacy
     page.goto("/pharmacies/")
