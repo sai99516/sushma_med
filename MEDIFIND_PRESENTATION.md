@@ -241,7 +241,7 @@ After the fixes on branch `fix/all` (see "Fix log" in `MEDIFIND_REVIEW.md`). Tes
 - One owner manages exactly one pharmacy.
 - Notifications are in-app only. Password reset email works only after the `EMAIL_*` variables are filled in on Render.
 - The medicine detail page shows no distances.
-- Many files in `docs/` are outdated; see `docs/README_DOCS_STATUS.md`.
+- Many files in `docs/` are outdated; see `docs/README.md` (outdated files were later removed).
 
 **Answers that changed**
 - Q6 (roles): an `is_staff` user without the ADMIN role or superuser status no longer gets the admin portal. Admins can still open customer and pharmacy pages.
