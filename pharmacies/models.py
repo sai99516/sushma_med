@@ -1,7 +1,7 @@
 from django.conf import settings
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
-from accounts.validators import validate_phone_number
+from accounts.validators import validate_phone_number, validate_pincode
 
 class Pharmacy(models.Model):
     # Review N18: explicit approval status. `is_approved` is kept in sync
@@ -37,7 +37,7 @@ class Pharmacy(models.Model):
     address = models.TextField(verbose_name="Street Address")
     city = models.CharField(max_length=100, db_index=True)
     state = models.CharField(max_length=100)
-    pincode = models.CharField(max_length=20, db_index=True)
+    pincode = models.CharField(max_length=20, db_index=True, validators=[validate_pincode])
     phone_number = models.CharField(max_length=20, validators=[validate_phone_number])
     latitude = models.DecimalField(
         max_digits=9,

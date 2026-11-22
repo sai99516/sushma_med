@@ -21,3 +21,12 @@ def validate_phone_number(value):
             "Enter a valid phone number (7-15 digits; +, spaces, dashes and brackets are allowed).",
             code='invalid_phone',
         )
+
+
+_PINCODE = re.compile(r'^[1-9][0-9]{5}$')
+
+
+def validate_pincode(value):
+    """Indian PIN code: exactly 6 digits, not starting with 0 (review P5)."""
+    if value and not _PINCODE.match(str(value).strip()):
+        raise ValidationError("Enter a valid 6-digit PIN code (e.g. 500001).", code='invalid_pincode')

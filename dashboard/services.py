@@ -96,7 +96,7 @@ def get_pharmacy_dashboard_metrics(pharmacy: Pharmacy) -> Dict[str, Any]:
     and recent operational activity.
     """
     inv_counts = get_inventory_counts(pharmacy)
-    total_catalog_medicines = Medicine.objects.count()
+    total_catalog_medicines = Medicine.objects.filter(is_active=True).count()  # review P8: archived excluded
 
     req_counts = AvailabilityRequest.objects.filter(pharmacy=pharmacy).aggregate(
         total=Count('id'),

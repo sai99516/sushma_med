@@ -124,6 +124,11 @@ def parse_radius(radius_km: Any) -> Optional[float]:
 def paginate(queryset_or_list, page: Any, per_page: int) -> Page:
     paginator = Paginator(queryset_or_list, per_page)
     try:
+        if int(page) < 1:  # page=0 or negative -> first page, not the last (review P7)
+            page = 1
+    except (TypeError, ValueError):
+        page = 1
+    try:
         return paginator.page(page)
     except PageNotAnInteger:
         return paginator.page(1)
