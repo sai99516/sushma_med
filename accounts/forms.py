@@ -3,6 +3,7 @@ from django.contrib.auth import get_user_model, password_validation
 from django.contrib.auth.forms import AuthenticationForm
 from django.core.exceptions import ValidationError
 from pharmacies.models import Pharmacy
+from .validators import validate_phone_number
 
 User = get_user_model()
 
@@ -21,7 +22,7 @@ class CustomerRegistrationForm(forms.ModelForm):
     )
     password = forms.CharField(
         widget=forms.PasswordInput(attrs={'class': 'form-control', 'placeholder': 'Create strong password', 'id': 'id_cust_password'}),
-        min_length=6,
+        min_length=8,
         label="Password"
     )
     confirm_password = forms.CharField(
@@ -94,12 +95,13 @@ class PharmacyRegistrationForm(forms.ModelForm):
         label="Official Email"
     )
     owner_phone = forms.CharField(
+        validators=[validate_phone_number],
         widget=forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Owner mobile number'}),
         label="Owner Phone"
     )
     password = forms.CharField(
         widget=forms.PasswordInput(attrs={'class': 'form-control', 'placeholder': 'Create password', 'id': 'id_pharm_password'}),
-        min_length=6,
+        min_length=8,
         label="Password"
     )
     confirm_password = forms.CharField(

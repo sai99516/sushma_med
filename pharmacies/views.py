@@ -85,10 +85,15 @@ def pharmacy_detail_view(request, pk):
         messages.warning(request, "This pharmacy is pending administrative verification.")
         return redirect('search_medicines')
 
+    # Review N26: licence number only for the owner and admins.
+    can_see_licence = request.user.is_authenticated and (
+        request.user == pharmacy.owner or request.user.is_admin_user
+    )
     return render(request, 'pharmacies/detail.html', {
         'pharmacy': pharmacy,
         'inventory_items': inventory_items,
         'map_pin': map_pin,
+        'can_see_licence': can_see_licence,
     })
 
 

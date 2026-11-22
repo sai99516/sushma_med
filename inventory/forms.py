@@ -4,7 +4,7 @@ from .models import Inventory
 
 class InventoryAddForm(forms.ModelForm):
     medicine = forms.ModelChoiceField(
-        queryset=Medicine.objects.all().order_by('medicine_name'),
+        queryset=Medicine.objects.filter(is_active=True).order_by('medicine_name'),
         widget=forms.Select(attrs={'class': 'form-select'}),
         label="Select Medicine from Master Catalogue"
     )
@@ -12,6 +12,7 @@ class InventoryAddForm(forms.ModelForm):
     class Meta:
         model = Inventory
         fields = ['medicine', 'quantity']
+        labels = {'quantity': 'Set quantity'}
         widgets = {
             'quantity': forms.NumberInput(attrs={
                 'class': 'form-control',

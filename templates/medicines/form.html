@@ -15,6 +15,9 @@
 
       <form method="POST">
         {% csrf_token %}
+        {% if form.non_field_errors %}
+          <div class="alert alert-danger small">{{ form.non_field_errors }}</div>
+        {% endif %}
 
         <div class="row g-3">
           <div class="col-md-6">
@@ -51,6 +54,14 @@
             <label class="form-label fw-bold small text-muted">Description / Indications</label>
             {{ form.description }}
             {{ form.description.errors }}
+          </div>
+
+          <div class="col-12">
+            <div class="form-check">
+              {{ form.is_active }}
+              <label class="form-check-label small" for="{{ form.is_active.id_for_label }}">{{ form.is_active.label }}</label>
+              <div class="form-text small">{{ form.is_active.help_text }}</div>
+            </div>
           </div>
         </div>
 

@@ -70,8 +70,8 @@ def add_or_update_inventory(
     quantity: int
 ) -> Tuple[Inventory, bool]:
     """
-    Safely adds a medicine to a pharmacy's inventory or updates stock quantity if already present.
-    Returns (inventory_item, created).
+    Adds a medicine to a pharmacy's inventory, or SETS (replaces, does not add to)
+    the stock quantity if it is already listed (review N21). Returns (inventory_item, created).
     """
     existing = Inventory.objects.filter(pharmacy=pharmacy, medicine=medicine).first()
     if existing:

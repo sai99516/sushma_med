@@ -102,10 +102,6 @@ def authenticate_user(request, username: str, password: str) -> Tuple[Optional[U
         logger.warning("Failed login attempt for username: %s", username)
         return None, "Invalid username or password. Please verify your credentials."
 
-    if not user.is_active:
-        logger.warning("Login attempted for inactive user: %s", username)
-        return None, "This account is inactive. Please contact support."
-
     logger.info("Successful authentication for user: %s (role=%s)", user.username, user.role)
     return user, None
 

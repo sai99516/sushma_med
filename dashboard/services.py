@@ -17,9 +17,10 @@ def get_home_page_metrics() -> Dict[str, Any]:
     Computes public landing page metrics.
     """
     total_approved_pharmacies = Pharmacy.objects.filter(is_approved=True).count()
-    total_medicines = Medicine.objects.count()
+    total_medicines = Medicine.objects.filter(is_active=True).count()
     total_in_stock_listings = Inventory.objects.filter(
         pharmacy__is_approved=True,
+        medicine__is_active=True,
         availability_status='IN_STOCK'
     ).count()
 

@@ -1,4 +1,5 @@
 from django.db import models
+from django.db.models.functions import Lower
 
 class Medicine(models.Model):
     CATEGORY_CHOICES = (
@@ -53,6 +54,13 @@ class Medicine(models.Model):
         default='Other'
     )
     description = models.TextField(blank=True, help_text="Therapeutic purpose or instructions")
+    # Archive flag: inactive medicines are hidden from public search and the add-stock form.
+    is_active = models.BooleanField(
+        default=True,
+        db_index=True,
+        verbose_name="Active (visible in search)",
+        help_text="Untick to archive this medicine instead of deleting it."
+    )
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -62,6 +70,14 @@ class Medicine(models.Model):
         indexes = [
             models.Index(fields=['category', 'medicine_name'], name='med_cat_name_idx'),
             models.Index(fields=['dosage_form', 'category'], name='med_dosage_cat_idx'),
+        ]
+        # Review N28: no duplicate catalogue entries (case-insensitive name + strength, same form).
+        constraints = [
+            models.UniqueConstraint(
+                Lower('medicine_name'), Lower('strength'), 'dosage_form',
+                name='unique_medicine_name_strength_form',
+                violation_error_message="A medicine with this name, strength and dosage form already exists.",
+            ),
         ]
 
     def __str__(self):

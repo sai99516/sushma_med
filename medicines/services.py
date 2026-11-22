@@ -32,7 +32,8 @@ def search_medicine_inventory(
     """
     # Base queryset: strictly include stock only from verified/approved pharmacies!
     inventory_qs = Inventory.objects.filter(
-        pharmacy__is_approved=True
+        pharmacy__is_approved=True,
+        medicine__is_active=True,
     ).select_related('medicine', 'pharmacy')
 
     if query:
@@ -172,7 +173,7 @@ def get_medicine_detail_data(medicine_id: int):
     """
     Retrieves medicine details, approved pharmacy inventory, and map pins.
     """
-    medicine = get_object_or_404(Medicine, pk=medicine_id)
+    medicine = get_object_or_404(Medicine, pk=medicine_id, is_active=True)
     stock_records = Inventory.objects.filter(
         medicine=medicine,
         pharmacy__is_approved=True
@@ -181,7 +182,7 @@ def get_medicine_detail_data(medicine_id: int):
     map_pins = []
     for item in stock_records:
         p = item.pharmacy
-        if p.latitude and p.longitude:
+        if is_valid_coordinate(p.latitude, p.longitude):  # review N8: keeps 0.0
             map_pins.append({
                 'id': p.id,
                 'name': p.pharmacy_name,

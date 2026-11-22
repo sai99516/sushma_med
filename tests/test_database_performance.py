@@ -97,9 +97,15 @@ class DatabaseOptimizationAndPerformanceTests(TestCase):
             longitude=Decimal('78.490000'),
             is_approved=True
         )
-        # Unapproved Pharmacy
+        # Unapproved Pharmacy (own owner: Pharmacy.owner is one-to-one, review N11)
+        cls.owner3 = User.objects.create_user(
+            username='owner_perf3',
+            email='owner_perf3@test.com',
+            password='Password123!',
+            role='PHARMACY',
+        )
         cls.pharm_unapproved = Pharmacy.objects.create(
-            owner=cls.owner2,
+            owner=cls.owner3,
             pharmacy_name="Unapproved Store Perf",
             registration_number="REG-PERF-999",
             address="99 Shadow Way",
@@ -426,11 +432,16 @@ class DatabaseOptimizationAndPerformanceTests(TestCase):
         )
 
         pharm_id = pharm.id
-        pharm.delete()
+        # Review N29: requests PROTECT their pharmacy, so history cannot be deleted silently.
+        from django.db.models import ProtectedError
+        with self.assertRaises(ProtectedError):
+            pharm.delete()
+        self.assertTrue(AvailabilityRequest.objects.filter(pharmacy_id=pharm_id).exists())
 
-        # Related inventory and requests should be deleted via CASCADE
+        # Once the requests are removed, deleting the pharmacy cascades to its inventory.
+        req.delete()
+        pharm.delete()
         self.assertFalse(Inventory.objects.filter(pharmacy_id=pharm_id).exists())
-        self.assertFalse(AvailabilityRequest.objects.filter(pharmacy_id=pharm_id).exists())
 
     # ------------------------------------------------------------------ #
     # 14. Validation for positive quantities                             #

@@ -8,7 +8,7 @@ class Migration(migrations.Migration):
 
     dependencies = [
         ('medicines', '0002_alter_medicine_dosage_form_medicine_med_cat_name_idx_and_more'),
-        ('pharmacies', '0003_phase2'),
+        ('pharmacies', '0003_pharmacy_approval_status'),
         ('requests_app', '0002_alter_availabilityrequest_created_at_and_more'),
     ]
 

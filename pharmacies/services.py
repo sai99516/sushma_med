@@ -106,9 +106,8 @@ def discover_nearby_pharmacies(
     if search_query:
         qs = qs.filter(
             Q(pharmacy_name__icontains=search_query) |
-            Q(address__icontains=search_query) |
-            Q(registration_number__icontains=search_query)
-        )
+            Q(address__icontains=search_query)
+        )  # Review N26: licence number is not searchable publicly.
 
     if city:
         qs = qs.filter(city__icontains=city.strip())
@@ -207,7 +206,11 @@ def get_pharmacy_for_user(user) -> Optional[Pharmacy]:
     """
     if not user.is_authenticated:
         return None
-    return Pharmacy.objects.filter(owner=user).first()
+    # Review N11: owner is a OneToOneField (related_name='pharmacy').
+    try:
+        return user.pharmacy
+    except Pharmacy.DoesNotExist:
+        return None
 
 
 def _cancel_pending_requests_for_revoked(pharmacy: Pharmacy) -> int:
@@ -331,7 +334,7 @@ def get_pharmacy_detail_data(pharmacy_id: int, user) -> Tuple[Optional[Pharmacy]
     inventory_items = Inventory.objects.filter(pharmacy=pharmacy).select_related('medicine').order_by('-updated_at')
 
     map_pin = None
-    if pharmacy.latitude and pharmacy.longitude:
+    if is_valid_coordinate(pharmacy.latitude, pharmacy.longitude):  # review N8: keeps 0.0
         map_pin = {
             'id': pharmacy.id,
             'name': pharmacy.pharmacy_name,

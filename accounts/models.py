@@ -1,5 +1,6 @@
 from django.contrib.auth.models import AbstractUser
 from django.db import models
+from .validators import validate_phone_number
 
 class User(AbstractUser):
     ROLE_CHOICES = (
@@ -10,7 +11,7 @@ class User(AbstractUser):
     
     email = models.EmailField(unique=True, verbose_name="Email Address")
     role = models.CharField(max_length=20, choices=ROLE_CHOICES, default='CUSTOMER', db_index=True)
-    phone_number = models.CharField(max_length=15, blank=True)
+    phone_number = models.CharField(max_length=20, blank=True, validators=[validate_phone_number])
     created_at = models.DateTimeField(auto_now_add=True)
     
     class Meta:
@@ -28,7 +29,8 @@ class User(AbstractUser):
         
     @property
     def is_admin_user(self):
-        return self.role == 'ADMIN' or self.is_superuser or self.is_staff
+        # Review N16: is_staff alone (Django admin access) no longer grants the app admin portal.
+        return self.role == 'ADMIN' or self.is_superuser
 
     def __str__(self):
         return f"{self.username} ({self.get_role_display()})"

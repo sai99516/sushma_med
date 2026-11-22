@@ -57,7 +57,7 @@
         {% for med in medicines %}
           <tr>
             <td><code>{{ forloop.counter0|add:medicines.start_index }}</code></td>
-            <td class="fw-bold text-dark">{{ med.medicine_name }}</td>
+            <td class="fw-bold text-dark">{{ med.medicine_name }}{% if not med.is_active %} <span class="badge bg-secondary-subtle text-secondary border ms-1">Archived</span>{% endif %}</td>
             <td>{{ med.generic_name }}</td>
             <td><span class="badge bg-light text-secondary border">{{ med.strength }}</span></td>
             <td>{{ med.dosage_form }}</td>

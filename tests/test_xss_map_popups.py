@@ -90,8 +90,11 @@ class MaliciousPharmacyRenderTest(TestCase):
             phone_number='"><svg onload=1>', latitude='17.385044', longitude='78.486671',
             is_approved=True,
         )
+        owner2 = User.objects.create_user(
+            username='xss_owner2', email='xss_owner2@test.com', password='OwnerPass123!', role='PHARMACY'
+        )
         cls.pending = Pharmacy.objects.create(
-            owner=owner, pharmacy_name=PAYLOAD, registration_number='REG-XSS-2',
+            owner=owner2, pharmacy_name=PAYLOAD, registration_number='REG-XSS-2',
             address=PAYLOAD, city='Hyderabad', state='Telangana', pincode='500001',
             phone_number='123', latitude='17.4', longitude='78.4', is_approved=False,
         )

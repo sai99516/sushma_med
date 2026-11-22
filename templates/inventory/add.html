@@ -27,9 +27,9 @@
         </div>
 
         <div class="mb-4">
-          <label class="form-label fw-bold small text-muted">Initial Stock Quantity (Units) <span class="text-danger">*</span></label>
+          <label class="form-label fw-bold small text-muted">Set Quantity (Units) <span class="text-danger">*</span></label>
           {{ form.quantity }}
-          <div class="form-text small">Stock quantity cannot be negative. Stock &gt; 10 triggers In Stock; 1-10 triggers Low Stock; 0 triggers Out of Stock.</div>
+          <div class="form-text small">If this medicine is already in your inventory, its quantity is <strong>replaced</strong> with this number (not added). Stock &gt; 10 = In Stock; 1&ndash;10 = Low Stock; 0 = Out of Stock.</div>
           {{ form.quantity.errors }}
         </div>
 

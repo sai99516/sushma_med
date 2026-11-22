@@ -1,5 +1,7 @@
 from django.conf import settings
+from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
+from accounts.validators import validate_phone_number
 
 class Pharmacy(models.Model):
     # Review N18: explicit approval status. `is_approved` is kept in sync
@@ -15,10 +17,11 @@ class Pharmacy(models.Model):
     # Review known #5: changing any of these sends an approved pharmacy back to PENDING.
     SENSITIVE_FIELDS = ('pharmacy_name', 'address', 'city', 'pincode', 'latitude', 'longitude')
 
-    owner = models.ForeignKey(
+    # Review N11: one owner manages exactly one pharmacy.
+    owner = models.OneToOneField(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
-        related_name='pharmacies'
+        related_name='pharmacy'
     )
     pharmacy_name = models.CharField(
         max_length=200,
@@ -35,20 +38,22 @@ class Pharmacy(models.Model):
     city = models.CharField(max_length=100, db_index=True)
     state = models.CharField(max_length=100)
     pincode = models.CharField(max_length=20, db_index=True)
-    phone_number = models.CharField(max_length=15)
+    phone_number = models.CharField(max_length=20, validators=[validate_phone_number])
     latitude = models.DecimalField(
         max_digits=9,
         decimal_places=6,
         null=True,
         blank=True,
-        help_text="Latitude coordinate for map display"
+        validators=[MinValueValidator(-90), MaxValueValidator(90)],
+        help_text="Latitude coordinate for map display (-90 to 90)"
     )
     longitude = models.DecimalField(
         max_digits=9,
         decimal_places=6,
         null=True,
         blank=True,
-        help_text="Longitude coordinate for map display"
+        validators=[MinValueValidator(-180), MaxValueValidator(180)],
+        help_text="Longitude coordinate for map display (-180 to 180)"
     )
     is_approved = models.BooleanField(
         default=False,

@@ -76,9 +76,15 @@ class AdminPortalAndGovernanceTests(TestCase):
             is_approved=False,
         )
 
-        # Approved pharmacy
+        # Approved pharmacy (separate owner: Pharmacy.owner is one-to-one, review N11)
+        cls.pharm_owner_b = User.objects.create_user(
+            username='pharm_p7b',
+            email='pharm_p7b@test.com',
+            password='PharmPass123!',
+            role='PHARMACY',
+        )
         cls.pharmacy_approved = Pharmacy.objects.create(
-            owner=cls.pharm_owner,
+            owner=cls.pharm_owner_b,
             pharmacy_name='Approved Pharmacy P7',
             registration_number='REG-P7-002',
             address='2 Test Road',
@@ -272,13 +278,13 @@ class AdminPortalAndGovernanceTests(TestCase):
     def test_07_admin_pharmacy_list_pagination(self):
         """With 20 pharmacies in DB (plus 2 existing), page 1 has 15 and page 2 has the rest."""
         # Create 20 extra pharmacies for this test
-        extra_owner = User.objects.create_user(
-            username='extra_owner_p7',
-            email='extra_owner_p7@test.com',
-            password='ExtraPass123!',
-            role='PHARMACY',
-        )
         for i in range(20):
+            extra_owner = User.objects.create_user(
+                username=f'extra_owner_p7_{i}',
+                email=f'extra_owner_p7_{i}@test.com',
+                password='ExtraPass123!',
+                role='PHARMACY',
+            )
             Pharmacy.objects.create(
                 owner=extra_owner,
                 pharmacy_name=f'Pagination Pharmacy {i}',

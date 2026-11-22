@@ -3,7 +3,7 @@ from django.contrib import messages
 from django.contrib.auth import get_user_model
 from django.contrib.auth.decorators import login_required
 from django.shortcuts import redirect, render
-from accounts.decorators import admin_required, pharmacy_required
+from accounts.decorators import admin_required, customer_required, pharmacy_required
 from pharmacies.services import get_pharmacy_for_user
 from .services import (
     get_admin_dashboard_metrics,
@@ -33,7 +33,7 @@ def dashboard_dispatcher_view(request):
         return redirect('customer_dashboard')
 
 
-@login_required
+@customer_required
 def customer_dashboard_view(request):
     """Customer dashboard displaying inquiry metrics, recent activity, and notifications."""
     context = get_customer_dashboard_metrics(request.user)
