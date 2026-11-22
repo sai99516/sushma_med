@@ -443,3 +443,12 @@ Not bugs (checked): latitude/longitude inputs have no `min`/`max`, but the serve
 - Firefox and WebKit: only Chromium was installed.
 - OpenStreetMap tile images (stubbed on purpose); the request rate limit of 10 per hour and the per-IP login limit of 20 (covered by unit tests; hitting them here would affect other tests).
 - Production settings (DEBUG=False, WhiteNoise, HTTPS): the run uses `runserver` with DEBUG=True as requested.
+
+### Fixes for the end-to-end findings
+
+| ID | Fix | Test (fails before, passes after) | Commit |
+|---|---|---|---|
+| E1 | `static/admin/js/admin/RelatedObjectLookups.js` overrides Django's admin file (the project `static/` folder is found first, also by `collectstatic`). It is an exact copy of the Django 5.2.19 file with one change, `'unload'` → `'pagehide'`, the same change upstream Django made in 6.x. Delete the file after upgrading Django. | `tests/test_regressions_e2e.py::AdminUnloadListenerTests`; e2e `test_django_admin_login` | `2211d3a` |
+| E2 | `requests_app/forms.py`: the quantity widget no longer sets `min`/`value` in `Meta`; `__init__` sets `min="1"` and `max="1000"`, and the initial value 1 comes from the model default. The input now renders once with `min="1" max="1000" value="1"`, so the browser blocks 0 and 1001; the server checks are unchanged. | `tests/test_regressions_e2e.py::RequestQuantityInputTests`; e2e `test_request_availability_valid_duplicate_and_bad_quantities` now also expects the browser to block 0 and 1001 | `ad222a3` |
+
+**Re-run after the fixes:** the failed e2e test (`test_django_admin_login`) and the changed customer test passed. The full e2e suite was not re-run. Normal suite `manage.py test tests`: **160 tests, all passed** (158 before plus the 2 new regression tests).
