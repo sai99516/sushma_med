@@ -70,3 +70,32 @@ class MedicineDetailDistanceTests(TestCase):
         resp = self.client.get(self.url(lat='999', lng='abc', sort='distance'))
         self.assertEqual(resp.status_code, 200)
         self.assertFalse(resp.context['has_user_coords'])
+
+
+class SplitTemplateTagTests(TestCase):
+    """F4: a {{ ... }} tag split over two lines is printed as raw text by Django."""
+
+    def test_navbar_role_badge_renders(self):
+        from accounts.models import User
+        User.objects.create_user(username='cust', email='c@t.test', password='x', role='CUSTOMER')
+        self.client.login(username='cust', password='x')
+        resp = self.client.get('/')
+        self.assertNotContains(resp, 'user.role|lower')
+        self.assertContains(resp, '>customer</span>')
+
+    def test_medicine_detail_timesince_renders(self):
+        from django.urls import reverse
+        from inventory.models import Inventory
+        from medicines.models import Medicine
+        med = Medicine.objects.create(medicine_name='Dolo 650', generic_name='Paracetamol', strength='650mg')
+        Inventory.objects.create(pharmacy=_pharmacy('p1', 'P1', 17.4, 78.4), medicine=med, quantity=5)
+        resp = self.client.get(reverse('medicine_detail', args=[med.pk]))
+        self.assertNotContains(resp, 'item.updated_at|timesince')
+
+    def test_no_template_has_a_split_variable_tag(self):
+        import re
+        from pathlib import Path
+        from django.conf import settings
+        for path in (Path(settings.BASE_DIR) / 'templates').rglob('*.html'):
+            for n, line in enumerate(path.read_text().splitlines(), 1):
+                self.assertIsNone(re.search(r'\{\{[^}]*$', line), f'{path}:{n} has a split {{{{ }}}} tag')

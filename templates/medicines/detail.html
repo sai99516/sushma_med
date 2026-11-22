@@ -119,8 +119,7 @@
                 <span class="badge-out-stock">Reported Out of Stock</span>
                 {% endif %}
                 <span class="text-muted small">
-                  <i class="bi bi-clock-history me-1"></i>Reported: {{ item.updated_at|date:"M d, Y h:i A" }} ({{
-                  item.updated_at|timesince }} ago)
+                  <i class="bi bi-clock-history me-1"></i>Reported: {{ item.updated_at|date:"M d, Y h:i A" }} ({{ item.updated_at|timesince }} ago)
                 </span>
                 {% if item.is_stale %}
                 <span class="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle small">
