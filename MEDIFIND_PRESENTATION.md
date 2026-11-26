@@ -10,16 +10,14 @@ Diagrams for the slides: [docs/diagrams/](docs/diagrams/); screenshots: [docs/sc
 ## 1. Quick start (local)
 
 ```bash
-python3.11 -m venv .venv && source .venv/bin/activate   # Windows: .venv\Scripts\activate
-pip install -r requirements.txt
-cp .env.example .env                # local-safe: DEBUG=True, SQLite, console email
-python manage.py migrate
-python manage.py seed_data          # demo data (only runs with DEBUG=True)
-python manage.py runserver          # open http://127.0.0.1:8000
+python scripts/setup.py                  # Windows: py scripts\setup.py
+.venv/bin/python manage.py runserver     # Windows: .venv\Scripts\python.exe manage.py runserver
 ```
 
-For a clean demo, start from a fresh database with `bash scripts/reset_demo.sh` (it keeps a backup of the
-old one); otherwise Metro Life may already be approved from an earlier run.
+Then open http://127.0.0.1:8000. Manual steps (Linux/Mac and Windows) are in the [README](README.md).
+
+For a clean demo, start from a fresh database with `python scripts/setup.py --reset` (it keeps a backup
+of the old one); otherwise Metro Life may already be approved from an earlier run.
 
 **Demo logins** (from `medicines/management/commands/seed_data.py`; shown on the page only when DEBUG=True):
 
@@ -190,6 +188,6 @@ Tips:
 ## 7. Checks before presenting
 
 1. Run `python manage.py test tests` (and, if time allows, `python -m pytest e2e`) on the presenting machine.
-2. Run `bash scripts/reset_demo.sh`, so Metro Life is pending again.
+2. Run `python scripts/setup.py --reset` (Windows: `py scripts\setup.py --reset`), so Metro Life is pending again.
 3. Make sure `.env` has `DEBUG=True` (the demo logins and `seed_data` need it).
 4. Open two browsers (one normal, one private) before starting.

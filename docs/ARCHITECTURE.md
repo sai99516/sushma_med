@@ -30,7 +30,7 @@ MediFind is one Django project (one program, one database) that renders HTML on 
 | `templates/` | HTML templates, one folder per app; `base.html` is the shared layout; `404.html`, `500.html` |
 | `static/` | `css/styles.css`, `js/map_popup.js` (safe map popups), images, one patched Django admin script |
 | `tests/`, `e2e/` | Unit tests and browser tests (see [TESTING.md](TESTING.md)) |
-| `scripts/` | `reset_demo.sh`, `take_screenshots.py`, `check_doc_links.py` |
+| `scripts/` | `setup.py` (one-command setup and `--reset`), `take_screenshots.py`, `check_doc_links.py` |
 | `render.yaml`, `build.sh` | Deployment (see [DEPLOYMENT.md](DEPLOYMENT.md)) |
 | `.github/workflows/ci.yml`, `ruff.toml` | CI and lint settings |
 

@@ -78,7 +78,7 @@ pg_restore -d "$DATABASE_URL" --clean --no-owner medifind_YYYYMMDD.dump
 python manage.py dumpdata --natural-foreign --natural-primary -e contenttypes -e auth.Permission --indent 2 > backup.json
 ```
 
-Locally, copy `db.sqlite3` while the server is stopped, or use `scripts/reset_demo.sh` (it keeps a
+Locally, copy `db.sqlite3` while the server is stopped, or use `python scripts/setup.py --reset` (it keeps a
 backup).
 
 ## 5. Known limits

@@ -1,4 +1,6 @@
 """Tests for the finishing changes (F1-F9, see MEDIFIND_REVIEW.md "Finishing changes")."""
+import io
+
 from django.core.management import call_command
 from django.test import TestCase, override_settings
 
@@ -10,7 +12,7 @@ class SeedPendingPharmacyNameTests(TestCase):
 
     @override_settings(DEBUG=True)
     def test_seeded_pending_pharmacy_name_has_no_status(self):
-        call_command('seed_data', stdout=open('/dev/null', 'w'))
+        call_command('seed_data', stdout=io.StringIO())
         pharmacy = Pharmacy.objects.get(owner__username='pending_owner')
         self.assertEqual(pharmacy.approval_status, Pharmacy.STATUS_PENDING)
         self.assertEqual(pharmacy.pharmacy_name, '[DEMO] Metro Life Pharmacy')

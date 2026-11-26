@@ -122,7 +122,8 @@ correct references. Do not add sources you have not read.]
 | Portability | Runs locally with SQLite; production with PostgreSQL on a cloud host |
 
 ### 3.4 Hardware and software requirements
-- Development: any PC with Python 3.11, a web browser and internet (for maps and CSS/JS libraries).
+- Development: any PC (Windows, Linux or Mac) with Python 3.11, a web browser and internet (for maps
+  and CSS/JS libraries). `scripts/setup.py` prepares everything with one command.
   [TODO: your laptop details, operating system, editor.]
 - Server: Python 3.11, Django 5.2, Gunicorn; SQLite or PostgreSQL.
 - Client: any modern web browser.
@@ -339,6 +340,7 @@ and a large automated test suite. [TODO: your personal conclusion and what you l
 5. Playwright for Python documentation, https://playwright.dev/python/
 
 ## Appendix
-- A. How to run the project: see the project [README](../README.md).
+- A. How to run the project: `python scripts/setup.py` (Windows: `py scripts\setup.py`), then
+  `runserver`; details in the project [README](../README.md).
 - B. User guide: [USER_GUIDE.md](USER_GUIDE.md).
 - C. Full test list: [TESTING.md](TESTING.md).

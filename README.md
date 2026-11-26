@@ -17,11 +17,31 @@ Stock shown is reported by pharmacies. It is not a reservation and not medical a
 - Python **3.11**
 - No database server needed locally (SQLite). Production uses PostgreSQL.
 
-## Local setup
+## Quick start
+
+```bash
+git clone <repo-url> medifind && cd medifind
+python scripts/setup.py                  # Windows: py scripts\setup.py
+.venv/bin/python manage.py runserver     # Windows: .venv\Scripts\python.exe manage.py runserver
+```
+
+Open http://127.0.0.1:8000
+
+`scripts/setup.py` checks for Python 3.11+, creates `.venv`, installs `requirements.txt`, copies
+`.env.example` to `.env` (if missing), runs `migrate`, and runs `seed_data` when the database is new.
+It prints the exact command to start the server.
+
+**Fresh demo database:** `python scripts/setup.py --reset` (Windows: `py scripts\setup.py --reset`)
+moves `db.sqlite3` to a timestamped backup in the parent folder, then runs `migrate` and `seed_data`
+(so "Metro Life" is pending again for the demo).
+
+### Manual setup (same steps by hand)
+
+Linux / Mac:
 
 ```bash
 python3.11 -m venv .venv
-source .venv/bin/activate          # Windows: .venv\Scripts\activate
+source .venv/bin/activate
 pip install -r requirements.txt
 cp .env.example .env               # local-safe: DEBUG=True, SQLite, console email
 python manage.py migrate
@@ -29,7 +49,17 @@ python manage.py seed_data         # demo data; refuses to run when DEBUG=False
 python manage.py runserver
 ```
 
-Open http://127.0.0.1:8000
+Windows (cmd or PowerShell):
+
+```bat
+py -3.11 -m venv .venv
+.venv\Scripts\activate
+pip install -r requirements.txt
+copy .env.example .env
+python manage.py migrate
+python manage.py seed_data
+python manage.py runserver
+```
 
 `DEBUG` defaults to **False**. Without `DEBUG=True` in `.env` the app requires a
 real `SECRET_KEY` and `ALLOWED_HOSTS` and will not start.
@@ -44,9 +74,6 @@ real `SECRET_KEY` and `ALLOWED_HOSTS` and will not start.
 
 All demo logins are listed in [docs/USER_GUIDE.md](docs/USER_GUIDE.md#7-demo-data-local-only).
 Never run `seed_data` against a production database.
-
-**Fresh demo database:** `bash scripts/reset_demo.sh` moves `db.sqlite3` to a timestamped backup in the
-parent folder, then runs `migrate` and `seed_data` (so "Metro Life" is pending again for the demo).
 
 ## Running the tests
 
