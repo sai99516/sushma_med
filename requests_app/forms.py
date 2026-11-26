@@ -49,15 +49,23 @@ class PharmacyResponseForm(forms.ModelForm):
     status = forms.ChoiceField(
         choices=[
             ('CONFIRMED', 'Confirm Medicine Available for Pickup'),
+            ('PARTIAL', 'Partially Available (only some units)'),
             ('UNAVAILABLE', 'Report Medicine Unavailable / Out of Stock'),
         ],
         widget=forms.Select(attrs={'class': 'form-select'}),
         label="Update Availability Status"
     )
+    # Manual testing M3: required only when status is PARTIAL.
+    available_quantity = forms.IntegerField(
+        required=False,
+        min_value=1,
+        label="Units available",
+        widget=forms.NumberInput(attrs={'class': 'form-control', 'min': '1'}),
+    )
 
     class Meta:
         model = AvailabilityRequest
-        fields = ['status', 'pharmacy_response']
+        fields = ['status', 'available_quantity', 'pharmacy_response']
         widgets = {
             'pharmacy_response': forms.Textarea(attrs={
                 'class': 'form-control',
@@ -66,5 +74,27 @@ class PharmacyResponseForm(forms.ModelForm):
             }),
         }
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        requested = self.instance.quantity_requested if self.instance and self.instance.pk else None
+        if requested:
+            self.fields['available_quantity'].widget.attrs['max'] = str(max(requested - 1, 1))
+            self.fields['available_quantity'].help_text = f"Between 1 and {requested - 1} of the {requested} requested units."
+
     def clean_pharmacy_response(self):
         return _limit_length(self.cleaned_data.get('pharmacy_response', ''))
+
+    def clean(self):
+        cleaned = super().clean()
+        if cleaned.get('status') != 'PARTIAL':
+            cleaned['available_quantity'] = None
+            return cleaned
+        qty = cleaned.get('available_quantity')
+        requested = self.instance.quantity_requested
+        if requested < 2:
+            self.add_error('status', "Partial availability is not possible for a request of 1 unit.")
+        elif qty is None:
+            self.add_error('available_quantity', "Enter how many units are available.")
+        elif not (1 <= qty <= requested - 1):
+            self.add_error('available_quantity', f"Must be between 1 and {requested - 1}.")
+        return cleaned

@@ -48,6 +48,7 @@ def get_customer_dashboard_metrics(user, unread_count=None) -> Dict[str, Any]:
         total=Count('id'),
         pending=Count('id', filter=Q(status='PENDING')),
         confirmed=Count('id', filter=Q(status='CONFIRMED')),
+        partial=Count('id', filter=Q(status='PARTIAL')),
         unavailable=Count('id', filter=Q(status='UNAVAILABLE')),
         cancelled=Count('id', filter=Q(status='CANCELLED')),
     )
@@ -82,6 +83,7 @@ def get_customer_dashboard_metrics(user, unread_count=None) -> Dict[str, Any]:
         'total_requests': req_counts['total'] or 0,
         'pending_requests': req_counts['pending'] or 0,
         'confirmed_requests': req_counts['confirmed'] or 0,
+        'partial_requests': req_counts['partial'] or 0,
         'unavailable_requests': req_counts['unavailable'] or 0,
         'cancelled_requests': req_counts['cancelled'] or 0,
         'unread_notifications_count': unread_notifications_count,
@@ -164,6 +166,7 @@ def get_admin_dashboard_metrics() -> Dict[str, Any]:
         total=Count('id'),
         active=Count('id', filter=Q(status='PENDING')),
         confirmed=Count('id', filter=Q(status='CONFIRMED')),
+        partial=Count('id', filter=Q(status='PARTIAL')),
         unavailable=Count('id', filter=Q(status='UNAVAILABLE')),
         cancelled=Count('id', filter=Q(status='CANCELLED')),
     )
@@ -187,8 +190,10 @@ def get_admin_dashboard_metrics() -> Dict[str, Any]:
     cat_labels = [c['category'] for c in category_counts]
     cat_data = [c['count'] for c in category_counts]
 
-    # Completed = confirmed + unavailable (pharmacy responded)
-    completed_requests = (request_counts['confirmed'] or 0) + (request_counts['unavailable'] or 0)
+    # Completed = confirmed + partial + unavailable (pharmacy responded)
+    completed_requests = (
+        (request_counts['confirmed'] or 0) + (request_counts['partial'] or 0) + (request_counts['unavailable'] or 0)
+    )
 
     return {
         'total_customers': user_counts['customers'] or 0,

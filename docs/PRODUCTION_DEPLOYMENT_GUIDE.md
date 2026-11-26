@@ -40,7 +40,7 @@ login rate limit would block everyone after 5 failed logins.
 | `DEBUG=False` | `render.yaml` |
 | Real `SECRET_KEY` (app refuses to start without one) | `render.yaml` (`generateValue`) |
 | Exact `ALLOWED_HOSTS` and `CSRF_TRUSTED_ORIGINS` (https) | step 2 |
-| HTTPS redirect, HSTS, secure cookies, `X-Frame-Options: DENY` | automatic when DEBUG is False (`config/settings.py:184`) |
+| HTTPS redirect, HSTS, secure cookies, `X-Frame-Options: DENY` | automatic when DEBUG is False (`config/settings.py:188`) |
 | `TRUSTED_PROXY_COUNT=1` | `render.yaml` |
 | Email variables filled in | step 4 |
 | No demo data or demo logins | `seed_data` blocked; demo logins hidden when DEBUG is False |

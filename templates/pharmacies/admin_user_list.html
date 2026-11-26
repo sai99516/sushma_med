@@ -10,7 +10,7 @@
       <p class="text-muted small mb-0">Platform administrators can monitor registered customers and pharmacy accounts.</p>
     </div>
     <div class="d-flex flex-wrap gap-2">
-      <a href="?role=all{% if search_q %}&q={{ search_q }}{% endif %}" class="btn btn-sm btn-outline-secondary {% if role_filter == 'all' %}active{% endif %}">All Users ({{ total_count }})</a>
+      <a href="?role=all{% if search_q %}&q={{ search_q }}{% endif %}" class="btn btn-sm btn-outline-secondary {% if role_filter == 'all' %}active{% endif %}">All Users ({{ all_count }})</a>
       <a href="?role=customer{% if search_q %}&q={{ search_q }}{% endif %}" class="btn btn-sm btn-outline-primary {% if role_filter == 'customer' %}active{% endif %}">Customers</a>
       <a href="?role=pharmacy{% if search_q %}&q={{ search_q }}{% endif %}" class="btn btn-sm btn-outline-success {% if role_filter == 'pharmacy' %}active{% endif %}">Pharmacy Owners</a>
     </div>

@@ -265,10 +265,12 @@
                       <span class="badge-status-pending">Pending</span>
                     {% elif req.status == 'CONFIRMED' %}
                       <span class="badge-status-confirmed">Confirmed</span>
+                    {% elif req.status == 'PARTIAL' %}
+                      <span class="badge-status-partial">Partial: {{ req.available_quantity }} of {{ req.quantity_requested }}</span>
                     {% elif req.status == 'UNAVAILABLE' %}
                       <span class="badge-status-unavailable">Unavailable</span>
                     {% elif req.status == 'CANCELLED' %}
-                      <span class="badge bg-secondary-subtle text-secondary border">Cancelled</span>
+                      <span class="badge bg-secondary-subtle text-secondary border" title="{{ req.status_label }}">Cancelled</span>
                     {% else %}
                       <span class="badge bg-secondary">{{ req.status }}</span>
                     {% endif %}

@@ -74,14 +74,18 @@ the database stores UTC.
   (`+`, spaces, dashes, dots and brackets allowed).
 - **Log in / out.** Sign Out is a button (a POST form) in the user menu.
 - **Availability request** ("Is this medicine there?"): the "Request Availability" button on a search
-  result opens `/requests/create/<pharmacy_id>/<medicine_id>/`. Rules (`requests_app/services.py:23`,
+  result opens `/requests/create/<pharmacy_id>/<medicine_id>/`. Rules (`requests_app/services.py:26`,
   `requests_app/forms.py`):
   - the pharmacy must be approved and must list the medicine (any quantity);
   - only **customer** accounts can send requests (admins are redirected);
   - quantity 1 to 1000, optional note up to 1000 characters;
   - no second **pending** request for the same medicine at the same pharmacy;
   - at most 10 new requests per 60 minutes per customer.
-- **My Requests** (`/requests/my-requests/`): tabs All Inquiries / Pending Review / Confirmed In Stock / Unavailable / Cancelled.
+- **My Requests** (`/requests/my-requests/`): tabs All Inquiries / Pending Review / Confirmed In Stock /
+  Partially Available / Unavailable / Cancelled. A partial answer shows how many units the pharmacy has,
+  for example "60 of 100 available". A cancelled request says why: "Cancelled by Customer",
+  "Cancelled: pharmacy removed this medicine" or "Cancelled: pharmacy is no longer approved".
+  The response column only says "Waiting for pharmacist review…" while the request is pending.
   A pending request can be cancelled (with a confirm dialog). Answered requests cannot be cancelled.
 - **Notifications** (`/accounts/notifications/`): unread count in the navbar bell, filters
   (all / unread / read), "Mark Read" for one, "Mark All as Read".
@@ -90,16 +94,21 @@ the database stores UTC.
 ### Request states
 
 ```
-PENDING ──(pharmacy confirms)──> CONFIRMED     (final)
-   │   ──(pharmacy declines)──> UNAVAILABLE   (final)
-   │   ──(customer cancels)───> CANCELLED     (final)
-   ├──(admin revokes the pharmacy)──> CANCELLED, with an automatic note
-   └──(pharmacy deletes that stock row)──> CANCELLED, with an automatic note
+PENDING ──(pharmacy confirms)──────────> CONFIRMED     (final)
+   │   ──(pharmacy has only some units)─> PARTIAL       (final, with available_quantity)
+   │   ──(pharmacy declines)──────────> UNAVAILABLE   (final)
+   │   ──(customer cancels)───────────> CANCELLED     (final, reason CUSTOMER)
+   ├──(admin revokes the pharmacy)──> CANCELLED, reason PHARMACY_REVOKED, with an automatic note
+   └──(pharmacy deletes that stock row)──> CANCELLED, reason STOCK_REMOVED, with an automatic note
 ```
+
+`PARTIAL` ("Partially Available") needs an available quantity from 1 to the requested quantity minus 1,
+so it is not offered in practice for a request of 1 unit (the form rejects it). The cancel reason is
+stored in `cancel_reason`.
 
 A request is **answered once**: only a PENDING request can change. The change is a conditional
 database update (`... WHERE status='PENDING'`) inside a transaction, so a cancel and an answer at the
-same moment cannot overwrite each other (`requests_app/services.py:108`).
+same moment cannot overwrite each other (`requests_app/services.py:114`).
 
 ## 4. Pharmacy owner
 
@@ -113,14 +122,18 @@ same moment cannot overwrite each other (`requests_app/services.py:108`).
   already listed, the new number **replaces** the old one ("Set quantity"). Edit the quantity, delete a
   row (a confirm page, then POST). Deleting a row cancels that medicine's pending requests at this
   pharmacy and notifies the customers. Search, filter by status and sort by last update, name or quantity.
-- **Request inbox** (`/requests/pharmacy-inbox/`, shows Pending by default): open a pending request,
-  choose "Confirm Medicine Available for Pickup" or "Report Medicine Unavailable / Out of Stock" and add a message (up to 1000 characters). The customer is notified.
+- **Request inbox** (`/requests/pharmacy-inbox/`, shows Pending by default; tabs Pending / Confirmed /
+  Partial / Unavailable / Cancelled / All History): open a pending request and choose one of three answers:
+  "Confirm Medicine Available for Pickup", "Partially Available (only some units)" (then enter the units
+  available, 1 to requested − 1) or "Report Medicine Unavailable / Out of Stock". Add a message (up to
+  1000 characters). The customer is notified.
   After that the inbox shows "Answered" instead of "Respond". A cancelled request cannot be answered.
+  Opening or answering a request marks the owner's "New availability request" notification for it as read.
 - **Dashboard** (`/dashboard/pharmacy/`): stock counts, a doughnut chart, low/out-of-stock list,
   recent requests.
 - **Profile changes** (`/pharmacies/profile/edit/` or the profile page): if an **approved** pharmacy
   changes its name, address, city, pincode, latitude or longitude, it goes back to **Pending**, is hidden
-  from search and the owner is notified (`pharmacies/services.py:344`). Changing only the phone or state
+  from search and the owner is notified (`pharmacies/services.py:346`). Changing only the phone or state
   keeps it approved.
 - A **revoked** pharmacy is hidden from the public and cannot add, edit or delete stock or answer requests.
 
@@ -128,7 +141,9 @@ same moment cannot overwrite each other (`requests_app/services.py:108`).
 
 - **Admin dashboard** (`/dashboard/admin-portal/`): user, pharmacy and request counts, the 5 newest
   pending pharmacies with Approve buttons, recent requests, and a bar chart of medicines per category.
-- **Pharmacy approval** (`/pharmacies/manage/list/`, tabs All / Pending / Approved / Revoked).
+- **Pharmacy approval** (`/pharmacies/manage/list/`, tabs All / Pending / Approved / Revoked). The number
+  on "All (N)" is always the total of all pharmacies, whatever filter is open (same for "All Users (N)" and
+  the request monitor's "All (N)").
   Approval has three states:
 
   ```
@@ -140,7 +155,7 @@ same moment cannot overwrite each other (`requests_app/services.py:108`).
   Approve and Revoke are separate buttons. Clicking one twice changes nothing the second time
   ("already approved"). Revoke has an optional **reason** (up to 500 characters) that is added to the
   owner's notification. Revoking cancels the pharmacy's pending requests and notifies those customers and
-  the owner (`pharmacies/services.py:288`).
+  the owner (`pharmacies/services.py:290`).
 - **Approval history:** every status change (approve, revoke, and "back to Pending" after an owner edit)
   is stored with who, when, the old and new status and the reason. The owner and admins see it on the
   pharmacy page; it is also read-only in Django admin.
@@ -148,7 +163,8 @@ same moment cannot overwrite each other (`requests_app/services.py:108`).
   must be unique (ignoring case). Medicines are **archived** (untick "Active"), not deleted; archived
   medicines disappear from search, the detail page, the add-stock form and new requests.
 - **Users** (`/pharmacies/manage/users/`, customers and pharmacy owners) and **all requests**
-  (`/pharmacies/manage/requests/`) with search and filters.
+  (`/pharmacies/manage/requests/`, filters All / Pending / Confirmed / Partially Available / Unavailable /
+  Cancelled) with search. Cancelled rows show the cancel reason; partial rows show "X of Y available".
 - **Django admin** (`/admin/`): needs `is_staff`. Approval fields are read-only there; the
   "Approve/Revoke selected" actions use the same service as the portal, so notifications still go out.
 
@@ -160,8 +176,8 @@ same moment cannot overwrite each other (`requests_app/services.py:108`).
 | Pharmacy registers | the owner ("pending admin verification") |
 | Pharmacy approved / revoked | the owner |
 | Approved pharmacy edits name, address or location | the owner (needs re-approval) |
-| New availability request | the pharmacy owner |
-| Request confirmed / unavailable | the customer |
+| New availability request | the pharmacy owner (marked read when the owner opens or answers that request) |
+| Request confirmed / partially available / unavailable | the customer |
 | Pharmacy revoked while requests are pending | each affected customer |
 | Pharmacy deletes a stock row with pending requests | each affected customer |
 

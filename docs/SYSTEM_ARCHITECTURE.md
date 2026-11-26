@@ -13,6 +13,9 @@ MediFind is one Django project (a "monolith": one program, one database), with s
 - **Front end:** Django templates with Bootstrap 5.3.3, Bootstrap Icons, Leaflet 1.9.4 maps with
   OpenStreetMap tiles, and Chart.js 4.4.1. These come from CDNs with SRI hashes (a checksum the browser
   verifies). There is no React and no AJAX search; every filter reloads the page.
+  OpenStreetMap's tile usage policy needs a Referer, so `SECURE_REFERRER_POLICY` is
+  `strict-origin-when-cross-origin` and every `L.tileLayer` sets the same `referrerPolicy` and the
+  "© OpenStreetMap contributors" attribution.
 - **Production server:** Gunicorn (runs the Django app) and WhiteNoise (serves CSS/JS files).
 
 ## 2. Folder map
@@ -119,10 +122,10 @@ instead of one query per status.
 | How "In Stock / Low / Out" is decided | `Inventory.save()` in `inventory/models.py:52` |
 | The freshness rule (24h / 48h) | `inventory/models.py:66-99` |
 | The search order | `STOCK_RANK` in `medicines/services.py:22` |
-| Approve / revoke and the approval history | `set_pharmacy_approval()` in `pharmacies/services.py:288`, model `PharmacyApprovalLog` in `pharmacies/models.py:134` |
-| Re-approval after a profile edit | `apply_pharmacy_profile_update()` in `pharmacies/services.py:344` |
-| Request rules (duplicate, rate limit) | `create_availability_inquiry()` in `requests_app/services.py:23` |
-| "Answered once" | `respond_to_availability_inquiry()` in `requests_app/services.py:108` |
+| Approve / revoke and the approval history | `set_pharmacy_approval()` in `pharmacies/services.py:290`, model `PharmacyApprovalLog` in `pharmacies/models.py:134` |
+| Re-approval after a profile edit | `apply_pharmacy_profile_update()` in `pharmacies/services.py:346` |
+| Request rules (duplicate, rate limit) | `create_availability_inquiry()` in `requests_app/services.py:26` |
+| "Answered once" | `respond_to_availability_inquiry()` in `requests_app/services.py:114` |
 | Login rate limit | `login_view()` and helpers in `accounts/views.py:78-152` |
 | All settings and their defaults | `config/settings.py` and [ENVIRONMENT_VARIABLES_GUIDE.md](ENVIRONMENT_VARIABLES_GUIDE.md) |
 | Demo data | `medicines/management/commands/seed_data.py` |

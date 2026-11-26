@@ -61,9 +61,9 @@ python manage.py seed_data
 ## Running the tests
 
 ```bash
-python manage.py test tests            # 178 unit/integration tests
+python manage.py test tests            # 197 unit/integration tests
 
-pip install -r requirements-dev.txt    # browser tests (69, Playwright + Chromium) and ruff
+pip install -r requirements-dev.txt    # browser tests (70, Playwright + Chromium) and ruff
 python -m playwright install chromium
 python -m pytest e2e                   # builds its own temporary database
 python -m ruff check .                 # lint

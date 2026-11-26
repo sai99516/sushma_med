@@ -12,6 +12,9 @@ from medicines.models import Medicine
 from pharmacies.models import Pharmacy
 from .models import AvailabilityRequest, Notification
 
+# Answers a pharmacy can give (manual testing M3 added PARTIAL).
+ANSWER_STATUSES = ('CONFIRMED', 'PARTIAL', 'UNAVAILABLE')
+
 logger = logging.getLogger('medfind')
 
 
@@ -73,6 +76,7 @@ def create_availability_inquiry(
         # Dispatch notification to pharmacy owner
         Notification.objects.create(
             user=pharmacy.owner,
+            request=req,
             message=f"New availability request for '{medicine.medicine_name}' ({quantity_requested} units) from {customer.username}."
         )
 
@@ -92,6 +96,7 @@ def get_pharmacy_inbox_counts(pharmacy: Pharmacy) -> Dict[str, int]:
         total=Count('id'),
         pending=Count('id', filter=Q(status='PENDING')),
         confirmed=Count('id', filter=Q(status='CONFIRMED')),
+        partial=Count('id', filter=Q(status='PARTIAL')),
         unavailable=Count('id', filter=Q(status='UNAVAILABLE')),
         cancelled=Count('id', filter=Q(status='CANCELLED')),
     )
@@ -100,6 +105,7 @@ def get_pharmacy_inbox_counts(pharmacy: Pharmacy) -> Dict[str, int]:
         'total_count': aggregated['total'] or 0,
         'pending_count': aggregated['pending'] or 0,
         'confirmed_count': aggregated['confirmed'] or 0,
+        'partial_count': aggregated['partial'] or 0,
         'unavailable_count': aggregated['unavailable'] or 0,
         'cancelled_count': aggregated['cancelled'] or 0,
     }
@@ -109,7 +115,8 @@ def respond_to_availability_inquiry(
     request_id: int,
     pharmacy: Pharmacy,
     status: str,
-    pharmacy_response: str
+    pharmacy_response: str,
+    available_quantity=None,
 ) -> AvailabilityRequest:
     """
     Records a pharmacy's availability response and alerts the inquiring customer.
@@ -117,9 +124,13 @@ def respond_to_availability_inquiry(
     The status change is a conditional UPDATE (WHERE status='PENDING') inside a
     transaction, so a parallel cancel or second answer cannot be overwritten.
     Review N19: a revoked pharmacy cannot respond.
+    Manual testing M3: PARTIAL needs available_quantity between 1 and quantity_requested - 1.
+    Manual testing M6: the owner's "new request" notification is marked read.
     """
-    if status not in ('CONFIRMED', 'UNAVAILABLE'):
-        raise ValidationError(f"Invalid status transition: '{status}'. Pharmacy can only set CONFIRMED or UNAVAILABLE.")
+    if status not in ANSWER_STATUSES:
+        raise ValidationError(
+            f"Invalid status transition: '{status}'. Pharmacy can only set CONFIRMED, PARTIAL or UNAVAILABLE."
+        )
 
     if pharmacy.approval_status == Pharmacy.STATUS_REVOKED:
         raise ValidationError("Your pharmacy's approval has been revoked, so it cannot answer requests.")
@@ -131,24 +142,41 @@ def respond_to_availability_inquiry(
             pharmacy=pharmacy
         )
 
+        if status == 'PARTIAL':
+            max_partial = req_obj.quantity_requested - 1
+            if available_quantity is None or not (1 <= available_quantity <= max_partial):
+                if max_partial < 1:
+                    raise ValidationError(
+                        "Partial availability is not possible for a request of 1 unit. Choose Confirm or Unavailable."
+                    )
+                raise ValidationError(f"Available quantity must be between 1 and {max_partial}.")
+        else:
+            available_quantity = None
+
         updated = AvailabilityRequest.objects.filter(
             pk=req_obj.pk, pharmacy=pharmacy, status='PENDING'
-        ).update(status=status, pharmacy_response=pharmacy_response, updated_at=timezone.now())
+        ).update(
+            status=status, pharmacy_response=pharmacy_response,
+            available_quantity=available_quantity, updated_at=timezone.now(),
+        )
 
         if updated == 0:
             req_obj.refresh_from_db(fields=['status'])
             if req_obj.status == 'CANCELLED':
-                raise ValidationError("Cannot respond to a request that has already been cancelled by the customer.")
+                raise ValidationError("Cannot respond to a request that has already been cancelled.")
             raise ValidationError("This request has already been answered. A request can be answered only once.")
 
         req_obj.status = status
         req_obj.pharmacy_response = pharmacy_response
+        req_obj.available_quantity = available_quantity
+
+        mark_request_notifications_read(req_obj, pharmacy.owner)
 
         # Notify customer
-        status_text = req_obj.get_status_display()
         Notification.objects.create(
             user=req_obj.customer,
-            message=f"{pharmacy.pharmacy_name} answered your request for '{req_obj.medicine.medicine_name}': {status_text}."
+            request=req_obj,
+            message=f"{pharmacy.pharmacy_name} answered your request for '{req_obj.medicine.medicine_name}': {req_obj.status_label}."
         )
 
     logger.info(
@@ -156,6 +184,11 @@ def respond_to_availability_inquiry(
         req_obj.id, pharmacy.pharmacy_name, status
     )
     return req_obj
+
+
+def mark_request_notifications_read(req_obj: AvailabilityRequest, user) -> int:
+    """Manual testing M6: marks the user's unread notifications about this request as read."""
+    return Notification.objects.filter(user=user, request=req_obj, is_read=False).update(is_read=True)
 
 
 def cancel_availability_inquiry(request_id: int, customer) -> Tuple[bool, str]:
@@ -166,7 +199,9 @@ def cancel_availability_inquiry(request_id: int, customer) -> Tuple[bool, str]:
     req_obj = get_object_or_404(AvailabilityRequest, pk=request_id, customer=customer)
     updated = AvailabilityRequest.objects.filter(
         pk=req_obj.pk, customer=customer, status='PENDING'
-    ).update(status='CANCELLED', updated_at=timezone.now())
+    ).update(
+        status='CANCELLED', cancel_reason=AvailabilityRequest.CANCEL_CUSTOMER, updated_at=timezone.now()
+    )
     if updated:
         logger.info("Availability request #%d cancelled by customer: %s", req_obj.id, customer.username)
         return True, f"Request #{req_obj.id} has been cancelled."
@@ -187,12 +222,14 @@ def cancel_pending_requests_for_medicine(pharmacy: Pharmacy, medicine: Medicine)
         return 0
     AvailabilityRequest.objects.filter(pk__in=[r.pk for r in pending], status='PENDING').update(
         status='CANCELLED',
+        cancel_reason=AvailabilityRequest.CANCEL_STOCK_REMOVED,
         pharmacy_response='Automatically cancelled: the pharmacy no longer lists this medicine.',
         updated_at=timezone.now(),
     )
     Notification.objects.bulk_create([
         Notification(
             user=r.customer,
+            request=r,
             message=(
                 f"Your request for '{medicine.medicine_name}' at {pharmacy.pharmacy_name} was cancelled "
                 f"because the pharmacy no longer lists this medicine."

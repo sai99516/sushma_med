@@ -15,6 +15,7 @@ from .services import (
     cancel_availability_inquiry,
     create_availability_inquiry,
     get_pharmacy_inbox_counts,
+    mark_request_notifications_read,
     respond_to_availability_inquiry,
 )
 
@@ -73,7 +74,7 @@ def customer_requests_list_view(request):
     ).select_related('pharmacy', 'medicine').order_by('-created_at')
 
     status_filter = request.GET.get('status', '').strip().upper()
-    valid_statuses = {'PENDING', 'CONFIRMED', 'UNAVAILABLE', 'CANCELLED'}
+    valid_statuses = {'PENDING', 'CONFIRMED', 'PARTIAL', 'UNAVAILABLE', 'CANCELLED'}
     if status_filter in valid_statuses:
         requests_qs = requests_qs.filter(status=status_filter)
     else:
@@ -84,6 +85,7 @@ def customer_requests_list_view(request):
         total=Count('id'),
         pending=Count('id', filter=Q(status='PENDING')),
         confirmed=Count('id', filter=Q(status='CONFIRMED')),
+        partial=Count('id', filter=Q(status='PARTIAL')),
         unavailable=Count('id', filter=Q(status='UNAVAILABLE')),
         cancelled=Count('id', filter=Q(status='CANCELLED')),
     )
@@ -156,6 +158,7 @@ def pharmacy_inbox_view(request):
         'total_count': counts['total_count'],
         'pending_count': counts['pending_count'],
         'confirmed_count': counts['confirmed_count'],
+        'partial_count': counts['partial_count'],
         'unavailable_count': counts['unavailable_count'],
         'cancelled_count': counts['cancelled_count'],
     })
@@ -171,17 +174,23 @@ def respond_request_view(request, pk):
         pharmacy=pharmacy
     )
 
+    # Manual testing M6: opening the request marks its "new request" notification read.
+    mark_request_notifications_read(req_obj, request.user)
+
     if pharmacy.approval_status == Pharmacy.STATUS_REVOKED:
         messages.error(request, "Your pharmacy's approval has been revoked, so it cannot answer requests.")
         return redirect('pharmacy_inbox')
 
     if req_obj.status == 'CANCELLED':
-        messages.warning(request, f"Request #{req_obj.id} was cancelled by the customer and cannot be modified.")
+        if req_obj.cancel_reason in ('', AvailabilityRequest.CANCEL_CUSTOMER):
+            messages.warning(request, f"Request #{req_obj.id} was cancelled by the customer and cannot be modified.")
+        else:
+            messages.warning(request, f"Request #{req_obj.id} cannot be modified ({req_obj.status_label}).")
         return redirect('pharmacy_inbox')
 
     # Review N3: a request can be answered only once.
     if req_obj.status != 'PENDING':
-        messages.info(request, f"Request #{req_obj.id} has already been answered ({req_obj.get_status_display()}).")
+        messages.info(request, f"Request #{req_obj.id} has already been answered ({req_obj.status_label}).")
         return redirect('pharmacy_inbox')
 
     if request.method == 'POST':
@@ -192,7 +201,8 @@ def respond_request_view(request, pk):
                     request_id=pk,
                     pharmacy=pharmacy,
                     status=form.cleaned_data['status'],
-                    pharmacy_response=form.cleaned_data.get('pharmacy_response', '')
+                    pharmacy_response=form.cleaned_data.get('pharmacy_response', ''),
+                    available_quantity=form.cleaned_data.get('available_quantity'),
                 )
                 messages.success(request, f"Response recorded for Request #{req_obj.id}.")
                 return redirect('pharmacy_inbox')

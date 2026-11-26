@@ -480,3 +480,33 @@ submission. One commit per item; each item with behaviour has a test that failed
 Django 6.x upgrade not done (5.2.19 is the latest 5.2 LTS release).
 
 Docs updated to this state: `README.md`, `docs/*.md`, `MEDIFIND_PRESENTATION.md` (main text).
+
+## Manual testing fixes (M1-M7)
+
+Branch `fix/manual-testing` (from `main`, 2026-11-26). Seven bugs found by manual testing, fixed in one
+commit as requested. Tests: `tests/test_manual_testing.py` (19 tests) and the browser test
+`e2e/test_pharmacy.py::test_partial_availability_answer`.
+
+| ID | Severity | Bug | Cause | Fix | Test |
+|---|---|---|---|---|---|
+| M1 | High | OpenStreetMap tiles show 403 "not following the tile usage policy" | Django's default `SECURE_REFERRER_POLICY = 'same-origin'` sends no Referer to `tile.openstreetmap.org` | `SECURE_REFERRER_POLICY = 'strict-origin-when-cross-origin'`; all 4 `L.tileLayer` calls (search, discovery, pharmacy detail, medicine detail) set the same `referrerPolicy` and the full "© OpenStreetMap contributors" attribution with the copyright link | `M1MapTileTests` |
+| M2 | Medium | Requests cancelled because stock was deleted (or the pharmacy was revoked) show "Cancelled by Customer" | Every cancel stored only `CANCELLED`, and that status's label was "Cancelled by Customer" | New field `cancel_reason` (`CUSTOMER` / `STOCK_REMOVED` / `PHARMACY_REVOKED`), set by all three cancel paths; `status_label` shows "Cancelled: pharmacy removed this medicine" / "Cancelled: pharmacy is no longer approved". The migration fills the reason for old rows from the automatic note | `M2SystemCancelTests` |
+| M3 | Medium | No partial availability | Only CONFIRMED and UNAVAILABLE existed | New status `PARTIAL` ("Partially Available") with `available_quantity` (1 to requested − 1, checked in the form and the service). Third choice in the respond form; answer-once rule unchanged (same conditional update). Customer sees "60 of 100 available"; added to customer tabs, pharmacy inbox, admin monitor filter, dashboards and Django admin; admin "completed" count includes it | `M3PartialAvailabilityTests`, e2e `test_partial_availability_answer` |
+| M4 | Low | Cancelled requests still say "Waiting for pharmacist review…" | The response column used that text for every request without a pharmacy note | Text per status: pending → waiting; cancelled → the cancel reason; answered without note → "The pharmacy answered without a note." | `M4StatusTextTests` |
+| M5 | Low | "All (N)" / "All Users (N)" showed the filtered count | The button used `paginator.count` of the filtered list | Views pass `all_count` (all pharmacies / all non-admin users / all requests) | `M5AllCountTests` |
+| M6 | Low | The owner's "new request" notification stays unread | Notifications had no link to the request | New optional FK `Notification.request` (SET_NULL); opening the respond page or answering marks the owner's notifications for that request read. Notifications created before this change have no link and stay as they are | `M6OwnerNotificationReadTests`, e2e `test_partial_availability_answer` |
+| M7 | Trivial | `docs/DATABASE_ARCHITECTURE.md` said "Migrations (17)" | Not updated after `pharmacies.0006` | Real count is now 19 (18 + the new `requests_app.0004`); fixed in both places in that file | `M7MigrationCountDocsTests` (checks every "N migrations" in the docs) |
+
+**New migration:** `requests_app.0004_manual_testing_partial_cancel_reason_notif_request` (adds
+`available_quantity`, `cancel_reason`, `Notification.request`, the `PARTIAL` choice, and fills
+`cancel_reason` for existing cancelled rows). `build.sh` runs `migrate` on deploy; run
+`python manage.py migrate` locally.
+
+**Results:** ruff clean; `manage.py check` and `makemigrations --check` clean; unit tests 197/197 passed;
+browser tests 70/70 passed. During the run one browser test needed a code fix (the owner's warning for a
+customer-cancelled request keeps the old wording "cancelled by the customer"), and
+`test_xss_search_map_popups` failed once by timing and then passed 4 times in a row with no code change.
+
+Docs updated: `README.md`, `docs/USER_GUIDE.md`, `docs/DATABASE_ARCHITECTURE.md`, `docs/TESTING_REPORT.md`,
+`docs/SYSTEM_ARCHITECTURE.md`, `docs/SECURITY_FINAL_REVIEW.md`, `docs/README.md`, `MEDIFIND_PRESENTATION.md`
+(features, optional demo step, test counts) and the code line references that moved.

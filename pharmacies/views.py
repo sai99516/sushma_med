@@ -180,6 +180,8 @@ def admin_pharmacy_list_view(request):
         'search_q': search_q,
         'query_string': query_string,
         'total_count': paginator.count,
+        # Manual testing M5: the "All (N)" button shows every pharmacy, not the filtered count.
+        'all_count': Pharmacy.objects.count(),
     })
 
 
@@ -250,6 +252,7 @@ def admin_user_list_view(request):
         'search_q': search_q,
         'query_string': query_string,
         'total_count': paginator.count,
+        'all_count': User.objects.exclude(role='ADMIN').count(),  # manual testing M5
     })
 
 
@@ -296,4 +299,5 @@ def admin_request_monitor_view(request):
         'search_q': search_q,
         'query_string': query_string,
         'total_count': paginator.count,
+        'all_count': AvailabilityRequest.objects.count(),  # manual testing M5
     })

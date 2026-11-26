@@ -371,6 +371,28 @@ h1, h2, h3, h4, h5, h6 {
   display: inline-block;
 }
 
+/* Manual testing M3: partially available */
+.badge-status-partial {
+  background-color: #e0f2fe;
+  color: #075985;
+  font-weight: 600;
+  padding: 0.35rem 0.75rem;
+  border-radius: var(--med-radius-pill);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.82rem;
+}
+
+.badge-status-partial::before {
+  content: '';
+  width: 7px;
+  height: 7px;
+  background-color: #0284c7;
+  border-radius: 50%;
+  display: inline-block;
+}
+
 /* Modern Form Controls */
 .form-label {
   color: var(--med-text-primary);

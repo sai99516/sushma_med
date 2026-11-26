@@ -7,15 +7,15 @@ and `pytest e2e --collect-only`; the results in section 4 were run on that commi
 
 There are two kinds of tests:
 
-- **Unit/integration tests** (`tests/`, 178 tests in 16 files): Django's test client sends requests to the
+- **Unit/integration tests** (`tests/`, 197 tests in 17 files): Django's test client sends requests to the
   views and checks responses and database rows. They use a fresh test database each run.
-- **End-to-end browser tests** (`e2e/`, 69 tests in 7 files): a real Chromium browser (driven by Playwright)
+- **End-to-end browser tests** (`e2e/`, 70 tests in 7 files): a real Chromium browser (driven by Playwright)
   clicks through the running app like a user.
 
 ## 1. Run the unit tests
 
 ```bash
-python manage.py test tests                     # all 178
+python manage.py test tests                     # all 197
 python manage.py test tests.test_security       # one file
 ```
 
@@ -41,10 +41,11 @@ What `e2e/conftest.py` does:
 
 ## 3. What the tests cover
 
-### `tests/` (178)
+### `tests/` (197)
 
 | File | Tests | Covers |
 |---|---|---|
+| `test_manual_testing.py` | 19 | Manual testing fixes M1–M7: referrer policy and OSM attribution, cancel reasons, partial availability, status texts, "All (N)" totals, owner notification read, migration count in the docs |
 | `test_finishing.py` | 18 | Finishing changes F1–F8: seed name, medicine-page distances, split template tags, approval history and reason, stock delete cancels requests, customer-only requests, 404/500 pages |
 | `test_features.py` | 17 | Core flows: registration, login, stock status, search, distance, requests, cancel, approval, catalogue, role guards, notifications |
 | `test_admin_portal.py` | 16 | Admin dashboard, pharmacy list filters/search/pagination, approve/revoke, users, request monitor |
@@ -62,22 +63,22 @@ What `e2e/conftest.py` does:
 | `test_demo_logins.py` | 2 | Demo logins shown only with DEBUG=True |
 | `test_regressions_e2e.py` | 2 | Browser-found bugs E1 (admin script) and E2 (quantity input min/max) |
 
-### `e2e/` (69)
+### `e2e/` (70)
 
 | File | Tests | Covers |
 |---|---|---|
 | `test_visitor.py` | 16 | Home, search filters and order, pagination, geolocation allowed/denied, maps, detail pages, "Use my location" on the medicine page, stale badge, 375px and 1280px layouts |
 | `test_auth.py` | 13 | Registration (valid and invalid), login, lockout, Sign Out, password reset via the console email, profile, change password |
 | `test_security.py` | 19 | Stored XSS payload on map and admin pages, 12 direct-URL role checks, cross-pharmacy 404s, `/admin/` for a customer, GET logout 405 |
-| `test_pharmacy.py` | 9 | Dashboard and chart, stock add/set/delete, inbox answer once, re-approval after address change, revoked pharmacy |
+| `test_pharmacy.py` | 10 | Dashboard and chart, stock add/set/delete, inbox answer once, partial availability answer, re-approval after address change, revoked pharmacy |
 | `test_admin.py` | 6 | Dashboard chart, approve (double click and stale tab), revoke, catalogue add/edit/archive, lists, Django admin |
 | `test_customer.py` | 5 | Request rules (duplicate, quantity 0 and 1001), tabs, cancel dialog, notifications |
 | `test_00_demo_script.py` | 1 | The 5-minute demo from `MEDIFIND_PRESENTATION.md` |
 
-## 4. Latest results (commit `513e68f`, 2026-11-22)
+## 4. Latest results (branch `fix/manual-testing`, 2026-11-26)
 
-- Unit tests: **178 tests, all passed** (`python manage.py test tests`, about 73 s).
-- Browser tests: **69 tests, all passed** (`python -m pytest e2e`, about 2 minutes).
+- Unit tests: **197 tests, all passed** (`python manage.py test tests`, about 80 s).
+- Browser tests: **70 tests, all passed** (`python -m pytest e2e`, about 2 minutes).
 - `python -m ruff check .`: no issues. `makemigrations --check`: no changes.
 - Earlier runs and the bugs they found are in `MEDIFIND_REVIEW.md`.
 - CI (`.github/workflows/ci.yml`) runs the same steps on GitHub; it has not run yet because the repo has

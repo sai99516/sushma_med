@@ -16,7 +16,7 @@ in this order:
 | 5 | [SECURITY_FINAL_REVIEW.md](SECURITY_FINAL_REVIEW.md) | Security controls (settings, login rate limit, CSRF, XSS) and known gaps |
 | 6 | [ENVIRONMENT_VARIABLES_GUIDE.md](ENVIRONMENT_VARIABLES_GUIDE.md) | Local setup and every environment variable with its default |
 | 7 | [PRODUCTION_DEPLOYMENT_GUIDE.md](PRODUCTION_DEPLOYMENT_GUIDE.md) | Deploying to Render, production checklist, backups |
-| 8 | [TESTING_REPORT.md](TESTING_REPORT.md) | Running the 178 unit tests and 69 browser tests, lint and CI, and what they cover |
+| 8 | [TESTING_REPORT.md](TESTING_REPORT.md) | Running the 197 unit tests and 70 browser tests, lint and CI, and what they cover |
 
 Outside this folder:
 

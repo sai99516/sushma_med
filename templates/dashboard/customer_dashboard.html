@@ -143,10 +143,12 @@
                       <span class="badge-status-pending">Pending Review</span>
                     {% elif req.status == 'CONFIRMED' %}
                       <span class="badge-status-confirmed"><i class="bi bi-check-circle me-1"></i>Confirmed</span>
+                    {% elif req.status == 'PARTIAL' %}
+                      <span class="badge-status-partial" title="{{ req.status_label }}">{{ req.available_quantity }} of {{ req.quantity_requested }} available</span>
                     {% elif req.status == 'UNAVAILABLE' %}
                       <span class="badge-status-unavailable"><i class="bi bi-x-circle me-1"></i>Unavailable</span>
                     {% elif req.status == 'CANCELLED' %}
-                      <span class="badge bg-secondary-subtle text-secondary border">Cancelled</span>
+                      <span class="badge bg-secondary-subtle text-secondary border" title="{{ req.status_label }}">{{ req.status_label }}</span>
                     {% else %}
                       <span class="badge bg-secondary">{{ req.status }}</span>
                     {% endif %}
@@ -160,7 +162,7 @@
                           Cancel
                         </button>
                       </form>
-                    {% elif req.status == 'CONFIRMED' %}
+                    {% elif req.status == 'CONFIRMED' or req.status == 'PARTIAL' %}
                       <a href="tel:{{ req.pharmacy.phone_number }}" class="btn btn-sm btn-outline-success" title="Call pharmacy to hold">
                         <i class="bi bi-telephone"></i> Call
                       </a>

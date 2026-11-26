@@ -10,7 +10,7 @@
       <p class="text-muted small mb-0">Platform administrators must verify and approve registered pharmacies before their stock is published to the public search.</p>
     </div>
     <div class="d-flex flex-wrap gap-2 align-items-center">
-      <a href="?status=all{% if search_q %}&q={{ search_q }}{% endif %}" class="btn btn-sm btn-outline-secondary {% if status_filter == 'all' %}active{% endif %}">All ({{ total_count }})</a>
+      <a href="?status=all{% if search_q %}&q={{ search_q }}{% endif %}" class="btn btn-sm btn-outline-secondary {% if status_filter == 'all' %}active{% endif %}">All ({{ all_count }})</a>
       <a href="?status=pending{% if search_q %}&q={{ search_q }}{% endif %}" class="btn btn-sm btn-outline-warning {% if status_filter == 'pending' %}active{% endif %}">Pending Approval</a>
       <a href="?status=approved{% if search_q %}&q={{ search_q }}{% endif %}" class="btn btn-sm btn-outline-success {% if status_filter == 'approved' %}active{% endif %}">Approved Only</a>
       <a href="?status=revoked{% if search_q %}&q={{ search_q }}{% endif %}" class="btn btn-sm btn-outline-danger {% if status_filter == 'revoked' %}active{% endif %}">Revoked</a>

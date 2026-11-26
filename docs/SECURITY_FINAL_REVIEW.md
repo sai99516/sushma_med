@@ -16,7 +16,7 @@ it and by the tests named at the end. For the history of every finding and fix, 
 | `SECRET_KEY` | Read from the environment. If it is missing and DEBUG is False, the app stops with `ImproperlyConfigured`. A fixed, clearly insecure key is used only when DEBUG is True |
 | `ALLOWED_HOSTS` | From the environment. Default: `localhost,127.0.0.1,[::1]` when DEBUG is True, **empty** otherwise. No `*` default |
 | `CSRF_TRUSTED_ORIGINS` | From the environment, default empty |
-| Always on | `SECURE_CONTENT_TYPE_NOSNIFF`, `SESSION_COOKIE_HTTPONLY`, `SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')` |
+| Always on | `SECURE_REFERRER_POLICY = 'strict-origin-when-cross-origin'` (OpenStreetMap tiles need the site origin as Referer; the path and query are never sent to other sites), `SECURE_CONTENT_TYPE_NOSNIFF`, `SESSION_COOKIE_HTTPONLY`, `SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')` |
 | When DEBUG is False | `X_FRAME_OPTIONS = 'DENY'`, secure session and CSRF cookies, `SECURE_SSL_REDIRECT` (default True), HSTS (`SECURE_HSTS_SECONDS` default 31536000, include subdomains, preload) |
 
 `python manage.py check --deploy` with production-like settings reported no issues during the

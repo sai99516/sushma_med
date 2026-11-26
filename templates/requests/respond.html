@@ -45,6 +45,14 @@
           {{ form.status.errors }}
         </div>
 
+        <!-- Manual testing M3: partial availability quantity -->
+        <div class="mb-4" id="partial-qty-group">
+          <label class="form-label fw-bold small text-muted" for="{{ form.available_quantity.id_for_label }}">Units available (only for Partially Available)</label>
+          {{ form.available_quantity }}
+          <div class="form-text small">{{ form.available_quantity.help_text }}</div>
+          {{ form.available_quantity.errors }}
+        </div>
+
         <div class="mb-4">
           <label class="form-label fw-bold small text-muted">Pharmacist Note / Pickup Instructions</label>
           {{ form.pharmacy_response }}
@@ -61,6 +69,15 @@
           </button>
         </div>
       </form>
+      <script>
+        (function () {
+          var statusSel = document.getElementById('{{ form.status.id_for_label }}');
+          var group = document.getElementById('partial-qty-group');
+          function sync() { group.style.display = statusSel.value === 'PARTIAL' ? '' : 'none'; }
+          statusSel.addEventListener('change', sync);
+          sync();
+        })();
+      </script>
     </div>
   </div>
 </div>

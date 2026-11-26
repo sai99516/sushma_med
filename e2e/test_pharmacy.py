@@ -264,3 +264,36 @@ def test_revoked_pharmacy_cannot_edit_stock(page):
     page.goto(f"/requests/{req.pk}/respond/")
     page.wait_for_url(re.compile(r"/requests/pharmacy-inbox/"))
     expect(page.locator(".alert-danger.alert-dismissible")).to_contain_text("cannot answer requests")
+
+
+def test_partial_availability_answer(page, new_context):
+    """Manual testing M3/M6: the owner answers 'Partially Available'; the customer sees '60 of 100 available'."""
+    from requests_app.models import Notification
+    from requests_app.services import create_availability_inquiry
+    from medicines.models import Medicine
+    p = make_pharmacy()
+    make_stock(p, "Dolo 650", 60)
+    cust = make_customer()
+    req = create_availability_inquiry(cust, p, Medicine.objects.get(medicine_name="Dolo 650"), 100)
+
+    owner_login(page, p)
+    expect(page.locator("a[title=Notifications] .badge")).to_have_text("1")
+    page.goto(f"/requests/{req.pk}/respond/")
+    qty = page.locator("#id_available_quantity")
+    expect(qty).to_be_hidden()
+    page.locator("#id_status").select_option("PARTIAL")
+    expect(qty).to_be_visible()
+    qty.fill("60")
+    page.locator("#id_pharmacy_response").fill("Rest arrives Monday")
+    page.locator("main form button[type=submit]").click()
+    page.wait_for_url(re.compile(r"/requests/pharmacy-inbox/"))
+    expect(page.locator("a[title=Notifications] .badge")).to_have_count(0)
+    assert Notification.objects.filter(user=p.owner, request=req, is_read=True).exists()
+
+    req.refresh_from_db()
+    assert (req.status, req.available_quantity) == ("PARTIAL", 60)
+
+    c = new_context().new_page()
+    login(c, cust.username)
+    c.goto("/requests/my-requests/")
+    expect(c.locator("tbody tr", has_text="Dolo 650")).to_contain_text("60 of 100 available")

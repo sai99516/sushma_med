@@ -8,8 +8,19 @@ class AvailabilityRequest(models.Model):
     STATUS_CHOICES = (
         ('PENDING', 'Pending Pharmacy Review'),
         ('CONFIRMED', 'Confirmed Available'),
+        ('PARTIAL', 'Partially Available'),
         ('UNAVAILABLE', 'Reported Unavailable'),
-        ('CANCELLED', 'Cancelled by Customer'),
+        ('CANCELLED', 'Cancelled'),
+    )
+
+    # Manual testing M2: who or what cancelled the request.
+    CANCEL_CUSTOMER = 'CUSTOMER'
+    CANCEL_STOCK_REMOVED = 'STOCK_REMOVED'
+    CANCEL_PHARMACY_REVOKED = 'PHARMACY_REVOKED'
+    CANCEL_REASON_CHOICES = (
+        (CANCEL_CUSTOMER, 'Cancelled by Customer'),
+        (CANCEL_STOCK_REMOVED, 'Cancelled: pharmacy removed this medicine'),
+        (CANCEL_PHARMACY_REVOKED, 'Cancelled: pharmacy is no longer approved'),
     )
 
     customer = models.ForeignKey(
@@ -43,6 +54,10 @@ class AvailabilityRequest(models.Model):
         default='PENDING',
         db_index=True
     )
+    # Manual testing M3: units the pharmacy has when it answers PARTIAL (1 .. requested - 1).
+    available_quantity = models.PositiveIntegerField(null=True, blank=True)
+    # Manual testing M2: empty unless status is CANCELLED.
+    cancel_reason = models.CharField(max_length=20, choices=CANCEL_REASON_CHOICES, blank=True, default='')
     pharmacy_response = models.TextField(
         blank=True,
         help_text="Response message or pickup instructions from the pharmacist"
@@ -61,6 +76,15 @@ class AvailabilityRequest(models.Model):
             models.Index(fields=['pharmacy', '-created_at'], name='req_pharm_created_idx'),
         ]
 
+    @property
+    def status_label(self):
+        """Human text for the status, including why it was cancelled and partial quantities."""
+        if self.status == 'CANCELLED':
+            return self.get_cancel_reason_display() or 'Cancelled by Customer'
+        if self.status == 'PARTIAL':
+            return f"Partially Available: {self.available_quantity} of {self.quantity_requested} available"
+        return self.get_status_display()
+
     def __str__(self):
         return f"Req #{self.id}: {self.medicine.medicine_name} from {self.customer.username} -> {self.pharmacy.pharmacy_name} ({self.status})"
 
@@ -72,6 +96,15 @@ class Notification(models.Model):
         related_name='notifications'
     )
     message = models.TextField()
+    # Manual testing M6: the request this notification is about (if any), so it can be
+    # marked read when the owner opens or answers that request.
+    request = models.ForeignKey(
+        AvailabilityRequest,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='notifications'
+    )
     is_read = models.BooleanField(default=False, db_index=True)
     created_at = models.DateTimeField(auto_now_add=True, db_index=True)
 

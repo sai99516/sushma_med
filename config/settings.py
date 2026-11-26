@@ -175,6 +175,10 @@ LOGOUT_REDIRECT_URL = 'home'
 # Security & Reverse Proxy Settings
 SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 SECURE_CONTENT_TYPE_NOSNIFF = True
+# Manual testing M1: Django's default 'same-origin' sends no Referer to tile.openstreetmap.org,
+# and OSM then answers 403 ("not following the tile usage policy"). This policy sends only
+# the origin (never the path or query) to other sites, and nothing on an HTTPS->HTTP downgrade.
+SECURE_REFERRER_POLICY = 'strict-origin-when-cross-origin'
 SESSION_COOKIE_HTTPONLY = True
 
 if not DEBUG:

@@ -48,7 +48,9 @@ Seed data: 6 pharmacies in Hyderabad, Bengaluru and New Delhi (5 approved, 1 pen
 - Register, log in, Sign Out (button), edit profile, change or reset password.
 - Availability request (customers only; quantity 1–1000 + note) to an approved pharmacy that lists the medicine. No
   duplicate pending request for the same medicine and pharmacy; at most 10 requests per hour.
-- "My Requests" with status tabs; cancel while pending. Notifications page and dashboard.
+- "My Requests" with status tabs (including Partially Available, e.g. "60 of 100 available"); cancel while
+  pending. Cancelled requests say why (by the customer, medicine removed, pharmacy no longer approved).
+  Notifications page and dashboard.
 
 **Pharmacy owner**
 - Register the pharmacy (licence number, 6-digit pincode, optional map coordinates). It starts as
@@ -57,7 +59,8 @@ Seed data: 6 pharmacies in Hyderabad, Bengaluru and New Delhi (5 approved, 1 pen
   medicine's pending requests); search, filter, sort.
   Status is automatic: more than 10 = In Stock, 1–10 = Low Stock, 0 = Out of Stock.
 - Freshness tiers: within 24h, 24–48h, over 48h ("confirm before visiting").
-- Request inbox: confirm or decline once, with a message; the customer is notified.
+- Request inbox: answer once with Confirm, Partially Available (how many units) or Unavailable, plus a
+  message; the customer is notified. Opening a request marks its "new request" notification read.
 - Dashboard with a stock chart. Changing name, address or location sends the pharmacy back to Pending.
 
 **Admin**
@@ -65,7 +68,7 @@ Seed data: 6 pharmacies in Hyderabad, Bengaluru and New Delhi (5 approved, 1 pen
 - Approve or revoke pharmacies (Pending / Approved / Revoked), with an optional reason. Revoking cancels
   the pharmacy's pending requests and notifies everyone affected. Every change is kept in an approval
   history shown to the owner and admins.
-- Medicine catalogue: add, edit, archive (no delete). Users list and all-requests monitor. Django admin at `/admin/`.
+- Medicine catalogue: add, edit, archive (no delete). Users list and all-requests monitor (with a Partially Available filter). Django admin at `/admin/`.
 
 ## 3. Demo script (about 5 minutes)
 
@@ -86,6 +89,8 @@ Seed data: 6 pharmacies in Hyderabad, Bengaluru and New Delhi (5 approved, 1 pen
 Tips:
 - Use two browsers (or one private window) to avoid logging out and in.
 - Optional extra: as `admin`, open Metro Life's pharmacy page and show the approval history.
+- Optional extra (partial answer): send a request for 100 units; as the owner choose **Partially Available**
+  and enter 60. The customer sees "60 of 100 available".
 - Optional extra (1 minute): as `pending_owner`, change the pharmacy address in the profile. It goes back
   to Pending and disappears from search until the admin approves it again.
 
@@ -110,10 +115,10 @@ Tips:
 5. **Main features**
    - Search with filters and distance (Haversine, computed in the database), with a map.
    - Pharmacy approval with three states; only approved pharmacies are public.
-   - Automatic stock status, freshness wording; request → answer once → notification.
+   - Automatic stock status, freshness wording; request → answer once (confirm / partial / unavailable) → notification.
 6. **Demo** (section 3).
 7. **Testing and security**
-   - 178 unit/integration tests and 69 browser tests (Playwright); lint and CI on every push.
+   - 197 unit/integration tests and 70 browser tests (Playwright); lint and CI on every push.
    - Role checks plus owner-scoped queries (404 for other users' data), POST-only actions, CSRF,
      login rate limit, safe map popups, safe production defaults.
 8. **Limitations and future work** (section 5).
@@ -155,7 +160,7 @@ Tips:
    (`pharmacies/services.py:37`) and as a database expression for filtering and sorting (`:93`).
 6. **Why must pharmacies be approved, and what if one changes its address?**
    To keep fake pharmacies out. Public queries filter on approval. Changing name, address or location
-   sends an approved pharmacy back to Pending (`pharmacies/services.py:344`). A revoked pharmacy is hidden
+   sends an approved pharmacy back to Pending (`pharmacies/services.py:346`). A revoked pharmacy is hidden
    and cannot change stock or answer requests. Every
    change is stored with who, when and an optional reason (`PharmacyApprovalLog`, `pharmacies/models.py:134`).
 7. **How are roles handled?**
@@ -163,7 +168,7 @@ Tips:
    (`accounts/models.py:31`); `is_staff` alone is not enough. Admins may also open customer pages.
 8. **Can a pharmacy change its answer, or answer a cancelled request?**
    No. Only a PENDING request can change, through a conditional database update in a transaction
-   (`requests_app/services.py:108`).
+   (`requests_app/services.py:114`).
 9. **Is it safe against CSRF, SQL injection and XSS?**
    CSRF middleware and tokens on every POST form; ORM only, no raw SQL; templates auto-escape, map data
    goes through `json_script`, and popups use `textContent` (`static/js/map_popup.js`). Tested with a
@@ -173,7 +178,7 @@ Tips:
     (`accounts/views.py:121`). Behind Render's proxy the real client IP is taken from `X-Forwarded-For`
     (`TRUSTED_PROXY_COUNT=1`).
 11. **How did you test it?**
-    178 Django tests (`python manage.py test tests`) and 69 Playwright browser tests (`python -m pytest e2e`)
+    197 Django tests (`python manage.py test tests`) and 70 Playwright browser tests (`python -m pytest e2e`)
     that fail on any console error. Details in `docs/TESTING_REPORT.md`.
 12. **What database do you use?**
     SQLite locally, PostgreSQL in production; `DATABASE_URL` decides.

@@ -2,7 +2,7 @@
 
 **Purpose:** The tables (models), their fields, relations, constraints and indexes, and how to rebuild the local database.
 **Who it is for:** Developers changing models or queries, and examiners asking about the data design.
-**Last verified:** 2026-11-22 against commit `513e68f` (7 models, 18 migrations, 15 named indexes).
+**Last verified:** 2026-11-22 against commit `513e68f` (7 models, 19 migrations, 15 named indexes).
 
 Django "models" are Python classes; each one is a database table. Django's ORM (object-relational mapper)
 turns Python queries into SQL, so the code has no raw SQL. Locally the database is the SQLite file
@@ -103,7 +103,9 @@ One row = one medicine at one pharmacy.
 | `medicine` | FK to Medicine, **PROTECT** |
 | `quantity_requested` | positive integer, at least 1 (the form also caps it at 1000) |
 | `request_message`, `pharmacy_response` | optional text (forms cap them at 1000 characters) |
-| `status` | `PENDING` (default) / `CONFIRMED` / `UNAVAILABLE` / `CANCELLED`, indexed |
+| `status` | `PENDING` (default) / `CONFIRMED` / `PARTIAL` / `UNAVAILABLE` / `CANCELLED`, indexed |
+| `available_quantity` | positive integer or empty; set only for `PARTIAL` (1 to `quantity_requested` − 1, checked in the form and the service) |
+| `cancel_reason` | empty / `CUSTOMER` / `STOCK_REMOVED` / `PHARMACY_REVOKED`; set when the status becomes `CANCELLED`. `status_label` turns it into the text users see |
 | `created_at` (indexed), `updated_at` | timestamps |
 
 ### Notification (`requests_app/models.py`)
@@ -112,6 +114,7 @@ One row = one medicine at one pharmacy.
 |---|---|
 | `user` | FK to User, CASCADE |
 | `message` | text |
+| `request` | FK to AvailabilityRequest, SET_NULL, optional; links request notifications so the owner's one is marked read when the request is opened or answered |
 | `is_read` | default False, indexed |
 | `created_at` | indexed |
 
@@ -150,14 +153,16 @@ Single columns marked "indexed" above have their own index as well (`db_index=Tr
 - Creating a request locks the customer row so two quick submits cannot both pass the duplicate and
   rate-limit checks.
 
-## 5. Migrations (17)
+## 5. Migrations (19)
 
 `accounts` 0001–0003, `inventory` 0001–0003, `medicines` 0001–0003, `pharmacies` 0001–0006,
-`requests_app` 0001–0003. Notable ones: `pharmacies.0003_pharmacy_approval_status` (adds the status and
+`requests_app` 0001–0004. Notable ones: `pharmacies.0003_pharmacy_approval_status` (adds the status and
 fills it from `is_approved`), `pharmacies.0004_…` (owner becomes one-to-one, coordinate validators),
 `pharmacies.0005_pharmacy_pincode_validator`, `pharmacies.0006_pharmacyapprovallog` (approval history),
 `medicines.0003_medicine_is_active_and_more` (archive flag
-and unique constraint), `requests_app.0003_availabilityrequest_protect_fks`.
+and unique constraint), `requests_app.0003_availabilityrequest_protect_fks`,
+`requests_app.0004_manual_testing_partial_cancel_reason_notif_request` (status `PARTIAL`,
+`available_quantity`, `cancel_reason` filled for old cancelled rows, `Notification.request`).
 
 Apply them with `python manage.py migrate` (`build.sh` does this on deploy). Check that models and
 migrations match with `python manage.py makemigrations --check`.

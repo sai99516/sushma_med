@@ -10,9 +10,10 @@
       <p class="text-muted small mb-0">Oversight of all patient-pharmacy availability inquiries across the MediFind network.</p>
     </div>
     <div class="d-flex flex-wrap gap-2">
-      <a href="?status=all{% if search_q %}&q={{ search_q }}{% endif %}" class="btn btn-sm btn-outline-secondary {% if status_filter == 'all' %}active{% endif %}">All ({{ total_count }})</a>
+      <a href="?status=all{% if search_q %}&q={{ search_q }}{% endif %}" class="btn btn-sm btn-outline-secondary {% if status_filter == 'all' %}active{% endif %}">All ({{ all_count }})</a>
       <a href="?status=PENDING{% if search_q %}&q={{ search_q }}{% endif %}" class="btn btn-sm btn-outline-warning {% if status_filter == 'PENDING' %}active{% endif %}">Pending</a>
       <a href="?status=CONFIRMED{% if search_q %}&q={{ search_q }}{% endif %}" class="btn btn-sm btn-outline-success {% if status_filter == 'CONFIRMED' %}active{% endif %}">Confirmed</a>
+      <a href="?status=PARTIAL{% if search_q %}&q={{ search_q }}{% endif %}" class="btn btn-sm btn-outline-info {% if status_filter == 'PARTIAL' %}active{% endif %}">Partially Available</a>
       <a href="?status=UNAVAILABLE{% if search_q %}&q={{ search_q }}{% endif %}" class="btn btn-sm btn-outline-danger {% if status_filter == 'UNAVAILABLE' %}active{% endif %}">Unavailable</a>
       <a href="?status=CANCELLED{% if search_q %}&q={{ search_q }}{% endif %}" class="btn btn-sm btn-outline-dark {% if status_filter == 'CANCELLED' %}active{% endif %}">Cancelled</a>
     </div>
@@ -71,10 +72,13 @@
                 <span class="badge-status-pending">Pending</span>
               {% elif req.status == 'CONFIRMED' %}
                 <span class="badge-status-confirmed">Confirmed</span>
+              {% elif req.status == 'PARTIAL' %}
+                <span class="badge-status-partial">Partially Available</span>
+                <div class="small text-muted mt-1">{{ req.available_quantity }} of {{ req.quantity_requested }} available</div>
               {% elif req.status == 'UNAVAILABLE' %}
                 <span class="badge-status-unavailable">Unavailable</span>
               {% elif req.status == 'CANCELLED' %}
-                <span class="badge bg-secondary-subtle text-secondary border">Cancelled</span>
+                <span class="badge bg-secondary-subtle text-secondary border">{{ req.status_label }}</span>
               {% else %}
                 <span class="badge bg-secondary">{{ req.status }}</span>
               {% endif %}

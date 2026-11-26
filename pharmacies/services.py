@@ -269,12 +269,14 @@ def _cancel_pending_requests_for_revoked(pharmacy: Pharmacy) -> int:
         return 0
     AvailabilityRequest.objects.filter(pk__in=[r.pk for r in pending], status='PENDING').update(
         status='CANCELLED',
+        cancel_reason=AvailabilityRequest.CANCEL_PHARMACY_REVOKED,
         pharmacy_response='Automatically cancelled: this pharmacy is no longer approved on MediFind.',
         updated_at=timezone.now(),
     )
     Notification.objects.bulk_create([
         Notification(
             user=r.customer,
+            request=r,
             message=(
                 f"Your request for '{r.medicine.medicine_name}' at {pharmacy.pharmacy_name} was cancelled "
                 f"because the pharmacy is no longer approved on MediFind."
