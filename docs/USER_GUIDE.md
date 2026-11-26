@@ -1,8 +1,8 @@
 # How MediFind works (user guide and rules)
 
-**Purpose:** What each kind of user can do in MediFind, and the rules the code enforces.
-**Who it is for:** Beginners, testers and examiners who want to understand the app before reading code.
-**Last verified:** 2026-11-22 against commit `513e68f`.
+What each kind of user can do in MediFind, and the rules the code enforces.
+Checked against the code on branch `fix/manual-testing` (2026-11-26). Screenshots are in
+[screenshots/](screenshots/).
 
 MediFind helps people find out which nearby pharmacy **reports** having a medicine.
 Stock is typed in by the pharmacy itself ("pharmacy-reported"). The app does not check it,
@@ -19,7 +19,7 @@ it is not a reservation, and it is not medical advice. A banner at the top of ev
 | Admin | `User.role == 'ADMIN'` **or** `is_superuser` (`accounts/models.py:31`) | `/dashboard/admin-portal/` |
 
 `/dashboard/` sends each logged-in user to the right dashboard (`dashboard/views.py:27`).
-Who may open which page is listed in [ROLE_PERMISSION_MATRIX.md](ROLE_PERMISSION_MATRIX.md).
+Who may open which page is listed in [ARCHITECTURE.md](ARCHITECTURE.md#6-roles-and-permissions).
 
 ## 2. Visitor (anyone)
 

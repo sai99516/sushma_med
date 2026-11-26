@@ -1,8 +1,9 @@
 # MediFind – Presentation Pack
 
-Matches the code at commit `513e68f` (2026-11-22). The demo script below is also an automated browser
-test (`e2e/test_00_demo_script.py`), which passed in the last full browser run recorded in
-`MEDIFIND_REVIEW.md` ("Finishing changes"). Run the tests yourself before quoting numbers (see section 6, Q11).
+Matches the code on branch `fix/manual-testing` (2026-11-26). The demo script below is also an automated
+browser test (`e2e/test_00_demo_script.py`), which passed in the last full run (197 unit tests and 70
+browser tests, all passed). Run the tests yourself before quoting numbers (see section 6, Q11).
+Diagrams for the slides: [docs/diagrams/](docs/diagrams/); screenshots: [docs/screenshots/](docs/screenshots/).
 
 ---
 
@@ -17,8 +18,8 @@ python manage.py seed_data          # demo data (only runs with DEBUG=True)
 python manage.py runserver          # open http://127.0.0.1:8000
 ```
 
-For a clean demo, start from a fresh database (see `docs/DATABASE_ARCHITECTURE.md`, "Rebuilding the
-local database"); otherwise Metro Life may already be approved from an earlier run.
+For a clean demo, start from a fresh database with `bash scripts/reset_demo.sh` (it keeps a backup of the
+old one); otherwise Metro Life may already be approved from an earlier run.
 
 **Demo logins** (from `medicines/management/commands/seed_data.py`; shown on the page only when DEBUG=True):
 
@@ -111,7 +112,8 @@ Tips:
 4. **Architecture**
    - Six Django apps: accounts, pharmacies, medicines, inventory, requests_app, dashboard.
    - URL → view (role check) → `services.py` (business rules) → template.
-   - Models: User (role), Pharmacy, Medicine, Inventory, AvailabilityRequest, Notification.
+   - 7 models: User (role), Pharmacy, PharmacyApprovalLog, Medicine, Inventory, AvailabilityRequest,
+     Notification (19 migrations). Show `docs/diagrams/architecture.png` and `er_diagram.png`.
 5. **Main features**
    - Search with filters and distance (Haversine, computed in the database), with a map.
    - Pharmacy approval with three states; only approved pharmacies are public.
@@ -179,7 +181,7 @@ Tips:
     (`TRUSTED_PROXY_COUNT=1`).
 11. **How did you test it?**
     197 Django tests (`python manage.py test tests`) and 70 Playwright browser tests (`python -m pytest e2e`)
-    that fail on any console error. Details in `docs/TESTING_REPORT.md`.
+    that fail on any console error. Details in `docs/TESTING.md`.
 12. **What database do you use?**
     SQLite locally, PostgreSQL in production; `DATABASE_URL` decides.
 13. **What would you improve first?**
@@ -188,68 +190,6 @@ Tips:
 ## 7. Checks before presenting
 
 1. Run `python manage.py test tests` (and, if time allows, `python -m pytest e2e`) on the presenting machine.
-2. Rebuild the local database and run `seed_data`, so Metro Life is pending again.
+2. Run `bash scripts/reset_demo.sh`, so Metro Life is pending again.
 3. Make sure `.env` has `DEBUG=True` (the demo logins and `seed_data` need it).
 4. Open two browsers (one normal, one private) before starting.
-
----
-
-## Additional presentation notes (applied)
-
-_Status: applied. Every item below is fixed or already reflected in the main text above; kept as history._
-
-Second pass (2026-11-22), from reading the code only. Details and fixes are in `MEDIFIND_REVIEW.md` → "Additional findings (second pass)".
-
-1. **Q7 ("Is it safe…?") is incomplete.** CSRF and SQL injection are fine, but there is a stored XSS in the map popups (review N1). Do not say "secure against XSS" until it is fixed. If asked, say: "The map data is passed safely with `json_script`, but the popup HTML must also be escaped. That is on the fix list."
-2. **Demo logins are visible to the audience.** `admin / admin123` and the other demo passwords appear in the footer of every page, on the home page and on the login page (`templates/base.html:242-244`, `templates/home.html:264-278`, `templates/accounts/login.html:66-72`). That is handy for the demo, but expect the question "is this on the live site too?". Slide 7's "some security settings still need fixing" should name it.
-3. **Do not type a pincode in the home page search box.** The "City or Pincode" box is sent as `city` (`templates/home.html:29`), so a pincode returns no results. Use the pincode filter on `/medicines/search/` instead, or search by city.
-4. **The search page shows a stray `} }` at the bottom** (`templates/medicines/search.html:494-496`). Fix it before the demo, or don't scroll to the bottom.
-5. **The footer contradicts slide 3.** The footer says "Bootstrap 5 / Leaflet / SQLite" (`templates/base.html:263`), while slide 3 says PostgreSQL in production. Change the footer, or say "SQLite locally".
-6. **The footer link "Store Inventory Directory" opens medicine search, not the pharmacy directory** (`templates/base.html:233`). Use the navbar "Nearby Pharmacies" link in the demo.
-7. **Demo step 3:50 (pharmacy confirms):** the pharmacy can answer again and flip CONFIRMED to UNAVAILABLE (review N3). Avoid double submits. If asked "can the pharmacy change its answer?", the honest answer today is "yes, and the customer is notified each time".
-8. **Demo step 1:30 (approve):** approval is a toggle. A double click un-approves the pharmacy (review N5). Click once and wait for the message.
-9. **The freshness wording has two rules.** Section 2 says "warning badge if older than 24h" for customers and "under 24h, 24–48h, over 48h" for pharmacies. Both are in the code (review N20). Present it as "customers are warned after 24h; the pharmacy console also shows a 48h tier", or unify the rule first.
-10. **Q6 (roles):** `@pharmacy_required` and `@customer_required` also let admins and any `is_staff` user in (review N16). Say "role decorators, with admins allowed everywhere".
-11. **Q5 (approval):** approval controls public visibility, but a revoked pharmacy can still manage stock and answer old requests (review N19). Add that to the limitations if asked.
-12. **Test numbers:** the `docs/` reports give anything from 17 to 136 tests. The code has 136 test functions (counted, not run). Quote that number only after running `python manage.py test tests` yourself. One fixture in `tests/test_admin_portal.py:102-113` silently fails (review N30).
-13. **Section 5 "email defaults to the console":** in production, setting `EMAIL_HOST` etc. as `.env.example` suggests does nothing, because settings never read those variables (review N6). So password reset does not work on Render as configured.
-
----
-
-## Updated notes after fixes (applied)
-
-_Status: applied. These changes are now part of the main text above; kept as history._
-
-After the fixes on branch `fix/all` (see "Fix log" in `MEDIFIND_REVIEW.md`). Tests were not run, so run `python manage.py test tests` yourself before quoting any test results.
-
-**Remove or replace these earlier claims**
-- Remove the XSS warning in note 1 above. Map popups are now built from DOM nodes with `textContent`, so pharmacy names and addresses are never parsed as HTML. If asked, say: "Map data is passed with `json_script`, and popups set text with `textContent`, not HTML strings." Still do not claim "fully secure": the app has had no external security test.
-- Do not describe the stock as "live" or "real-time". The UI now says "Pharmacy-reported · updated X ago".
-- Section 5 "Security items still to fix" and section 7 are done: safe settings defaults, `seed_data` blocked when DEBUG=False, POST logout, login rate limit, pinned packages, and Chart.js 4.4.1 with SRI. Notes 3–8, 10, 11 and 13 above are also fixed.
-
-**Changed setup**
-- `cp .env.example .env` is now the right local setup (DEBUG=True, SQLite). Without `DEBUG=True`, the app will not start unless `SECRET_KEY` and `ALLOWED_HOSTS` are set.
-- Demo logins appear on the page only when DEBUG=True. Keep the table in section 1 handy.
-
-**Changed demo steps**
-- **Sign out** is now a button in the user menu (POST form), not a link.
-- **Approve (1:30):** the buttons are explicit "Approve" / "Revoke". Clicking twice does nothing extra ("already approved"). The admin list has Pending / Approved / Revoked filters.
-- **Pharmacy confirms (3:50):** a request can be answered **only once**. After the answer, the inbox shows "Answered" instead of "Respond".
-- **Search (0:30 / 3:00):** results are ordered In Stock, then Low Stock, then Out of Stock. A pincode typed in the home search box now works.
-- **Request (3:20):** a customer can only request a medicine the pharmacy lists, cannot send a second pending request for the same medicine at the same pharmacy, and can send at most 10 requests per hour.
-- **Freshness:** `seed_data` now backdates some stock rows, so you can show the "updated 24–48h ago" and "over 48h ago · confirm before visiting" badges.
-- **Optional extra demo:** as `pending_owner` (after approval), change the pharmacy address in the profile. It goes back to "Pending" and disappears from search until the admin approves it again.
-
-**New or updated limitations (slide 7 / section 5)**
-- Stock is still self-reported; anything older than 24h tells the customer to confirm first.
-- Login rate limiting is per server process (local-memory cache), not shared across instances.
-- Revoking a pharmacy cancels its pending requests; there is no stored approval history or rejection reason.
-- One owner manages exactly one pharmacy.
-- Notifications are in-app only. Password reset email works only after the `EMAIL_*` variables are filled in on Render.
-- The medicine detail page shows no distances.
-- Many files in `docs/` are outdated; see `docs/README.md` (outdated files were later removed).
-
-**Answers that changed**
-- Q6 (roles): an `is_staff` user without the ADMIN role or superuser status no longer gets the admin portal. Admins can still open customer and pharmacy pages.
-- Q5 (approval): approval has three states (Pending, Approved, Revoked). A revoked pharmacy is hidden and cannot change stock or answer requests.
-- Q10 (what next): automatic stock sync, an approval audit log, and email/SMS alerts.

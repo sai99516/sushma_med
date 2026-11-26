@@ -1,0 +1,27 @@
+flowchart TB
+    B["Web browser<br/>HTML pages, Bootstrap, Leaflet map, Chart.js"]
+
+    subgraph Server["Django project (one server)"]
+        U["config/urls.py<br/>URL routing"]
+        subgraph Apps["Django apps"]
+            ACC["accounts<br/>users, roles, login, notifications page"]
+            MED["medicines<br/>catalogue, search"]
+            PH["pharmacies<br/>pharmacies, approval, distance, admin pages"]
+            INV["inventory<br/>stock"]
+            REQ["requests_app<br/>requests, notifications"]
+            DASH["dashboard<br/>home and dashboards"]
+        end
+        T["Templates<br/>server-rendered HTML"]
+    end
+
+    DB[("Database<br/>SQLite (local) / PostgreSQL (production)")]
+    CDN["CDNs<br/>Bootstrap, Leaflet, Chart.js"]
+    OSM["OpenStreetMap<br/>map tiles"]
+
+    B -- "HTTP request" --> U
+    U --> Apps
+    Apps -- "Django ORM" --> DB
+    Apps --> T
+    T -- "HTML response" --> B
+    B -- "CSS / JS files" --> CDN
+    B -- "map tiles" --> OSM

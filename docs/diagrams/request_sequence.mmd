@@ -1,0 +1,25 @@
+sequenceDiagram
+    actor C as Customer
+    participant W as MediFind (Django)
+    participant DB as Database
+    actor O as Pharmacy owner
+
+    C->>W: Search medicine, click "Request Availability"
+    C->>W: POST quantity + note
+    W->>DB: Check rules (approved pharmacy, medicine listed,<br/>no duplicate pending request, max 10 per hour)
+    W->>DB: Save request (PENDING) + notification for owner
+    W-->>C: "Request sent"
+    O->>W: Open inbox, open the request
+    W->>DB: Mark owner's notification for this request as read
+    O->>W: POST answer
+    alt Confirm
+        W->>DB: UPDATE status = CONFIRMED WHERE status = PENDING
+    else Partially available
+        W->>DB: UPDATE status = PARTIAL, available_quantity (1 to requested - 1)<br/>WHERE status = PENDING
+    else Decline
+        W->>DB: UPDATE status = UNAVAILABLE WHERE status = PENDING
+    end
+    W->>DB: Save notification for customer
+    W-->>O: "Response recorded" (request is now answered, cannot change)
+    C->>W: Open My Requests / notifications
+    W-->>C: Status, e.g. "60 of 100 available", and pharmacy message

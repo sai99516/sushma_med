@@ -1,9 +1,5 @@
 # MediFind
 
-**Purpose:** Project overview, local setup, tests and deployment in short.
-**Who it is for:** Anyone opening the project for the first time.
-**Last verified:** 2026-11-22 against commit `513e68f`.
-
 MediFind is a Django web app that helps people find medicines at nearby pharmacies.
 
 - **Customers** search medicines by name, city, pincode or distance, see the
@@ -38,7 +34,7 @@ Open http://127.0.0.1:8000
 `DEBUG` defaults to **False**. Without `DEBUG=True` in `.env` the app requires a
 real `SECRET_KEY` and `ALLOWED_HOSTS` and will not start.
 
-### Local demo logins (only after `seed_data`, only shown when DEBUG=True)
+### Demo logins (only after `seed_data`, only shown when DEBUG=True)
 
 | Role | Username | Password |
 |---|---|---|
@@ -46,17 +42,11 @@ real `SECRET_KEY` and `ALLOWED_HOSTS` and will not start.
 | Pharmacy owner | `apollo_owner` | `password123` |
 | Customer | `customer1` | `password123` |
 
+All demo logins are listed in [docs/USER_GUIDE.md](docs/USER_GUIDE.md#7-demo-data-local-only).
 Never run `seed_data` against a production database.
 
-### Rebuilding the local database
-
-`db.sqlite3` is ignored by git and may contain old data. To start clean:
-
-```bash
-mv db.sqlite3 db.sqlite3.bak       # keep a backup instead of deleting
-python manage.py migrate
-python manage.py seed_data
-```
+**Fresh demo database:** `bash scripts/reset_demo.sh` moves `db.sqlite3` to a timestamped backup in the
+parent folder, then runs `migrate` and `seed_data` (so "Metro Life" is pending again for the demo).
 
 ## Running the tests
 
@@ -70,22 +60,12 @@ python -m ruff check .                 # lint
 ```
 
 GitHub Actions (`.github/workflows/ci.yml`) runs all of this on every push.
-Details: `docs/TESTING_REPORT.md`.
+Details: [docs/TESTING.md](docs/TESTING.md).
 
 ## Deploying to Render
 
-`render.yaml` is a Render Blueprint (web service + free PostgreSQL).
-
-1. Push the repo and create a Blueprint from it on Render.
-2. In `render.yaml` / the Render dashboard, replace `medifind.onrender.com` with
-   your real URL in `ALLOWED_HOSTS` and `CSRF_TRUSTED_ORIGINS` (no wildcards).
-3. Fill in the email variables (`EMAIL_HOST`, `EMAIL_HOST_USER`,
-   `EMAIL_HOST_PASSWORD`, `DEFAULT_FROM_EMAIL`) so password reset emails are sent.
-4. `build.sh` installs requirements, runs `collectstatic` and `migrate`.
-5. Create the first admin with `python manage.py createsuperuser` in the Render
-   shell (do **not** use `seed_data`).
-
-See `.env.production.example` for every production variable.
+`render.yaml` is a Render Blueprint (web service + free PostgreSQL) and `build.sh` runs on every deploy.
+Steps and every environment variable: [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
 
 ## Known limitations
 
@@ -98,5 +78,7 @@ See `.env.production.example` for every production variable.
 
 ## Documentation
 
-Start at `docs/README.md` (reading order). The history of every review finding and fix is in
-`MEDIFIND_REVIEW.md`.
+Start at [docs/README.md](docs/README.md): user guide, architecture, testing, deployment, the report
+draft, diagrams and screenshots. Demo script and likely questions:
+[MEDIFIND_PRESENTATION.md](MEDIFIND_PRESENTATION.md). History of every review finding and fix:
+[MEDIFIND_REVIEW.md](MEDIFIND_REVIEW.md).

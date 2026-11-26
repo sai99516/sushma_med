@@ -1,0 +1,13 @@
+stateDiagram-v2
+    [*] --> PENDING : pharmacy owner registers
+    PENDING --> APPROVED : admin approves
+    PENDING --> REVOKED : admin revokes (rejects)
+    APPROVED --> REVOKED : admin revokes (pending requests cancelled)
+    REVOKED --> APPROVED : admin approves again
+    APPROVED --> PENDING : owner edits name, address or location
+
+    note right of APPROVED
+        Only APPROVED pharmacies are public
+        (search, directory, requests).
+        Every change is stored in PharmacyApprovalLog.
+    end note

@@ -1,0 +1,38 @@
+%% Use case diagram (Mermaid has no UML use-case type, so actors and use cases are drawn as a flowchart)
+flowchart LR
+    V([Visitor])
+    C([Customer])
+    P([Pharmacy owner])
+    A([Admin])
+
+    subgraph MediFind
+        UC1(Search medicines)
+        UC2(View medicine / pharmacy details and map)
+        UC3(Use my location: distance and nearest first)
+        UC4(Register and log in)
+        UC5(Send availability request)
+        UC6(Track or cancel my requests)
+        UC7(Read notifications)
+        UC8(Manage stock)
+        UC9(Answer request: confirm / partial / unavailable)
+        UC10(Edit pharmacy profile)
+        UC11(Approve or revoke pharmacies)
+        UC12(Manage medicine catalogue)
+        UC13(Monitor users and requests)
+    end
+
+    V --- UC1
+    V --- UC2
+    V --- UC3
+    V --- UC4
+    C --- UC5
+    C --- UC6
+    C --- UC7
+    P --- UC8
+    P --- UC9
+    P --- UC10
+    P --- UC7
+    A --- UC11
+    A --- UC12
+    A --- UC13
+    A --- UC7

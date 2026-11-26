@@ -510,3 +510,29 @@ customer-cancelled request keeps the old wording "cancelled by the customer"), a
 Docs updated: `README.md`, `docs/USER_GUIDE.md`, `docs/DATABASE_ARCHITECTURE.md`, `docs/TESTING_REPORT.md`,
 `docs/SYSTEM_ARCHITECTURE.md`, `docs/SECURITY_FINAL_REVIEW.md`, `docs/README.md`, `MEDIFIND_PRESENTATION.md`
 (features, optional demo step, test counts) and the code line references that moved.
+
+## Final cleanup
+
+Branch `fix/manual-testing`, 2026-11-26. Docs, scripts and report material only; no app logic, models
+or migrations changed.
+
+- **Docs merged (9 → 4 + index):** `docs/ARCHITECTURE.md` (system, database with ER diagram, roles and
+  permissions, security), `docs/DEPLOYMENT.md` (environment variables, Render, backups), `docs/TESTING.md`,
+  `docs/USER_GUIDE.md`, and a short `docs/README.md` index. Removed `SYSTEM_ARCHITECTURE.md`,
+  `DATABASE_ARCHITECTURE.md`, `ROLE_PERMISSION_MATRIX.md`, `SECURITY_FINAL_REVIEW.md`,
+  `ENVIRONMENT_VARIABLES_GUIDE.md`, `PRODUCTION_DEPLOYMENT_GUIDE.md` and `TESTING_REPORT.md`. Older
+  entries in this log still name those files; they are history.
+- **Presentation:** removed the two outdated history sections; numbers checked (197 unit tests, 70
+  browser tests, 7 models, 19 migrations); links point to the new docs and to `scripts/reset_demo.sh`.
+- **Removed `Procfile`** (`render.yaml` has the same start command).
+- **New scripts:** `scripts/reset_demo.sh` (backs up `db.sqlite3` to `../medifind_db_backup_<time>.sqlite3`,
+  then `migrate` + `seed_data`), `scripts/take_screenshots.py` (temporary database, 11 screenshots at
+  1366x768 in `docs/screenshots/`), `scripts/check_doc_links.py` (checks every relative Markdown link and
+  anchor).
+- **Diagrams** in `docs/diagrams/` as `.mmd` and PNG (rendered with `@mermaid-js/mermaid-cli` 11.4.2):
+  use case, architecture, ER, request sequence, approval flow.
+- **Report draft:** `docs/REPORT_DRAFT.md`, with `[TODO]` markers for the student's own details.
+- **Real map tiles:** the screenshot run loaded tiles from the public OpenStreetMap server, which confirms
+  the M1 fix in a real browser.
+- **Checks:** link checker, ruff, `manage.py check` and the unit tests (results in the commit message and
+  the summary). The browser suite was not re-run, because no app logic changed.
